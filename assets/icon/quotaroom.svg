@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="qrFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4F8EF7"/>
+      <stop offset="1" stop-color="#7C5CF6"/>
+    </linearGradient>
+    <clipPath id="qrTank">
+      <rect x="158" y="133" width="196" height="246" rx="41"/>
+    </clipPath>
+  </defs>
+
+  <rect width="512" height="512" rx="118" fill="#F7F6F4"/>
+  <rect x="2" y="2" width="508" height="508" rx="116"
+        fill="none" stroke="#EAE7F2" stroke-width="4"/>
+
+  <g clip-path="url(#qrTank)">
+    <rect x="158" y="236" width="196" height="143" fill="url(#qrFill)"/>
+  </g>
+
+  <rect x="151" y="126" width="210" height="260" rx="48"
+        fill="none" stroke="#14121A" stroke-width="14"/>
+  <path d="M158 236 H354" stroke="#14121A" stroke-width="14"
+        stroke-linecap="round"/>
+</svg>

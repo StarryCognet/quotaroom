@@ -1,0 +1,43 @@
+QuotaRoom
+=========
+
+QuotaRoom (Chinese: 额度空间) is an Android/Flutter port and rebrand of GoGauge:
+
+  GoGauge (opencode-go-gauge)
+  Copyright (c) 2026 GoGauge (yphyphyph)
+  https://github.com/yphyphyph/opencode-go-gauge
+  Licensed under the MIT License.
+
+QuotaRoom is a community project and is not an official mobile release from
+the upstream author. The upstream Windows desktop application is a separate
+project and is not included in this repository.
+
+A pre-rebrand GoGauge Mobile build (package com.gogauge.gogauge_mobile) was
+published at https://github.com/StarryCognet/gogauge-mobile. QuotaRoom uses a
+new package id (com.starrycognet.quotaroom) and is a separate application.
+
+Rebranding and changes:
+- New product name "QuotaRoom" / "额度空间", package id
+  com.starrycognet.quotaroom, and an original capacity-tank app icon
+  (a tank with a liquid level; the empty space above is the "room").
+- UI rewritten with Flutter/Dart (bottom navigation, mobile layouts, charts,
+  light/dark themes, Chinese/English UI).
+- opencode.ai console API client, quota parsing, SQLite aggregations and the
+  incremental/full sync cursor logic ported from Python to Dart.
+- Android in-app WebView login with a native CookieManager bridge for the
+  HttpOnly session cookie, plus a manual "paste cookie" fallback.
+- Session cookies stored in Android Keystore-backed secure storage instead of
+  the SQLite database.
+- Added an extra `created_ms` column so date/hour bucketing does not depend on
+  SQLite's ISO-8601 timezone parsing.
+- Bundled MIT license viewer inside the app (About -> Open Source Licenses).
+
+The MIT license text and the upstream copyright notice are preserved in the
+LICENSE file, which is also bundled as assets/LICENSE in the APK.
+
+Trademarks:
+- "OpenCode", "OpenCode Go" and the model names/logos shown in the app
+  (DeepSeek, GLM, GPT, Grok, Kimi, Meta, MiMo, MiniMax, Qwen, Hunyuan) belong
+  to their respective owners. They are used only to identify the services and
+  models being measured. This project is not affiliated with or endorsed by
+  them.

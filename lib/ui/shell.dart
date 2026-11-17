@@ -1,0 +1,170 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../core/formatters.dart';
+import '../core/theme.dart';
+import '../state/app_state.dart';
+import 'pages/accounts_page.dart';
+import 'pages/home_page.dart';
+import 'pages/records_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/stats_page.dart';
+import 'widgets/app_logo.dart';
+
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  int _index = 0;
+
+  static const List<Widget> _pages = [
+    HomePage(),
+    StatsPage(),
+    RecordsPage(),
+    AccountsPage(),
+    SettingsPage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final l10n = state.l10n;
+    final colors = context.colors;
+    final sync = state.dashboard?.sync;
+    final lastSync = fmtRelative(
+      sync?.lastSyncAt,
+      never: l10n.t('never'),
+      justNow: l10n.t('justNow'),
+      minAgo: l10n.t('minAgo'),
+      hrAgo: l10n.t('hrAgo'),
+      dayAgo: l10n.t('dayAgo'),
+    );
+    final subtitle = state.hasLoggedInAccount
+        ? '${l10n.t('lastSync')} $lastSync · ${fmtInt(sync?.totalRecords ?? 0)} ${l10n.t('records')}'
+        : l10n.t('notLoggedIn');
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _index != 0) {
+          setState(() => _index = 0);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 56,
+          titleSpacing: 14,
+          title: Row(
+            children: [
+              const AppLogo(size: 29),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'QuotaRoom',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: colors.text,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, color: colors.text3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: l10n.t('refresh'),
+              onPressed: state.syncing ? null : _manualSync,
+              icon: state.syncing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync_rounded),
+            ),
+            IconButton(
+              tooltip: dark ? l10n.t('themeLight') : l10n.t('themeDark'),
+              onPressed: state.toggleTheme,
+              icon: Icon(
+                dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          bottom: state.progress.running
+              ? const PreferredSize(
+                  preferredSize: Size.fromHeight(2),
+                  child: LinearProgressIndicator(minHeight: 2),
+                )
+              : null,
+        ),
+        body: SafeArea(
+          top: false,
+          child: IndexedStack(index: _index, children: _pages),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: (value) => setState(() => _index = value),
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.space_dashboard_outlined),
+              selectedIcon: const Icon(Icons.space_dashboard_rounded),
+              label: l10n.t('home'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.bar_chart_rounded),
+              selectedIcon: const Icon(Icons.insert_chart_rounded),
+              label: l10n.t('stats'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long_rounded),
+              label: l10n.t('recordsTab'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.manage_accounts_outlined),
+              selectedIcon: const Icon(Icons.manage_accounts_rounded),
+              label: l10n.t('accountsTab'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.settings_outlined),
+              selectedIcon: const Icon(Icons.settings_rounded),
+              label: l10n.t('settingsTab'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _manualSync() async {
+    final state = context.read<AppState>();
+    final l10n = state.l10n;
+    final result = await state.syncNow();
+    if (!mounted) return;
+    final text = result.ok
+        ? '${l10n.t('syncDone')} · +${result.inserted}'
+        : '${l10n.t('syncFailed')}: ${result.error ?? ''}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+}
