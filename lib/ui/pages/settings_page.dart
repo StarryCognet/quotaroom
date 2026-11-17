@@ -1,10 +1,15 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
+import '../../data/export_service.dart';
+import '../../data/models.dart';
+import '../../data/update_service.dart';
 import '../../state/app_state.dart';
 import '../login/login_page.dart';
 import '../widgets/common.dart';
@@ -41,19 +46,15 @@ class SettingsPage extends StatelessWidget {
               value: account?.hasToken == true
                   ? l10n.t('loggedIn')
                   : l10n.t('notLoggedIn'),
-              valueColor: account?.hasToken == true
-                  ? colors.green
-                  : colors.red,
+              valueColor: account?.hasToken == true ? colors.green : colors.red,
             ),
-            _InfoRow(
-              label: l10n.t('accountName'),
-              value: account?.name ?? '—',
-            ),
+            _InfoRow(label: l10n.t('accountName'), value: account?.name ?? '—'),
             _InfoRow(
               label: l10n.t('workspace'),
-              value: maskWorkspace(
-                account?.resolvedWorkspaceId ?? account?.workspaceHint,
-              ).isEmpty
+              value:
+                  maskWorkspace(
+                    account?.resolvedWorkspaceId ?? account?.workspaceHint,
+                  ).isEmpty
                   ? '—'
                   : maskWorkspace(
                       account?.resolvedWorkspaceId ?? account?.workspaceHint,
@@ -99,9 +100,8 @@ class SettingsPage extends StatelessWidget {
                 PillOption(value: 900, label: l10n.t('min15')),
                 PillOption(value: 1800, label: l10n.t('min30')),
               ],
-              onChanged: (value) => state.updateSettings(
-                syncIntervalSec: value,
-              ),
+              onChanged: (value) =>
+                  state.updateSettings(syncIntervalSec: value),
             ),
             _PillRow<int?>(
               title: l10n.t('syncRange'),
@@ -121,6 +121,25 @@ class SettingsPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _SettingsCard(
+          title: l10n.t('quotaAndAlerts'),
+          children: [
+            _BudgetRow(state: state),
+            _SwitchRow(
+              title: l10n.t('quotaAlert'),
+              subtitle: l10n.t('quotaAlertDesc'),
+              value: state.settings.notificationsEnabled,
+              onChanged: (value) => _toggleNotifications(context, state, value),
+            ),
+            if (state.settings.notificationsEnabled)
+              _ActionRow(
+                label: l10n.t('testNotification'),
+                icon: Icons.notifications_active_outlined,
+                onTap: () => _testNotification(context, state),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
           title: l10n.t('setAppearance'),
           children: [
             _PillRow<String>(
@@ -133,6 +152,12 @@ class SettingsPage extends StatelessWidget {
                 PillOption(value: 'dark', label: l10n.t('dark')),
               ],
               onChanged: (value) => state.setThemeMode(value),
+            ),
+            _SwitchRow(
+              title: l10n.t('amoled'),
+              subtitle: l10n.t('amoledDesc'),
+              value: state.settings.amoled,
+              onChanged: (value) => state.setAmoled(value),
             ),
             _PillRow<String>(
               title: l10n.t('currency'),
@@ -167,16 +192,61 @@ class SettingsPage extends StatelessWidget {
         _SettingsCard(
           title: l10n.t('setData'),
           children: [
-            _InfoRow(
-              label: l10n.t('dataDir'),
-              value: state.databasePath,
-            ),
+            _InfoRow(label: l10n.t('dataDir'), value: state.databasePath),
             _InfoRow(
               label: l10n.t('syncInfo'),
               value:
                   '${fmtInt(sync?.totalRecords ?? 0)} ${l10n.t('items')} · $lastSync',
             ),
             _VersionRow(l10n: l10n),
+            _UpdateRow(l10n: l10n, state: state),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          title: l10n.t('exportBackup'),
+          children: [
+            _ActionRow(
+              label: l10n.t('exportRecords'),
+              subtitle: l10n.t('exportRecordsDesc'),
+              icon: Icons.description_outlined,
+              onTap: () => _exportRecords(context),
+            ),
+            _ActionRow(
+              label: l10n.t('exportKeys'),
+              subtitle: l10n.t('exportKeysDesc'),
+              icon: Icons.table_chart_outlined,
+              onTap: () => _exportKeys(context),
+            ),
+            _ActionRow(
+              label: l10n.t('backupDatabase'),
+              subtitle: l10n.t('backupHint'),
+              icon: Icons.archive_outlined,
+              onTap: () => _backupDatabase(context),
+            ),
+            _ActionRow(
+              label: l10n.t('backupRestore'),
+              subtitle: l10n.t('backupRestoreHint'),
+              icon: Icons.settings_backup_restore_rounded,
+              onTap: () => _restoreBackup(context),
+            ),
+            _ActionRow(
+              label: l10n.t('shareSummary'),
+              subtitle: l10n.t('shareSummaryHint'),
+              icon: Icons.ios_share_rounded,
+              onTap: () => _shareSummary(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          title: l10n.t('syncLog'),
+          children: [
+            if (state.syncLog.isEmpty)
+              _InfoRow(label: l10n.t('noSyncLog'), value: '—')
+            else
+              for (final entry in state.syncLog.take(5))
+                _SyncLogRow(entry: entry, l10n: l10n),
           ],
         ),
         const SizedBox(height: 12),
@@ -186,9 +256,9 @@ class SettingsPage extends StatelessWidget {
             label: l10n.t('aboutTitle'),
             subtitle: 'QuotaRoom · ${l10n.t('aboutIntro')}',
             icon: Icons.info_outline_rounded,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AboutPage()),
-            ),
+            onTap: () =>
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const AboutPage())),
           ),
         ),
         const SizedBox(height: 18),
@@ -199,6 +269,181 @@ class SettingsPage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _toggleNotifications(
+    BuildContext context,
+    AppState state,
+    bool value,
+  ) async {
+    final enabled = await state.setNotificationsEnabled(value);
+    if (!context.mounted) return;
+    if (value && !enabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(state.l10n.t('notificationsDenied'))),
+      );
+    }
+  }
+
+  Future<void> _testNotification(BuildContext context, AppState state) async {
+    final sent = await state.sendTestNotification();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? state.l10n.t('testNotification')
+              : state.l10n.t('notificationsDenied'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportRecords(BuildContext context) async {
+    final state = context.read<AppState>();
+    final account = state.activeAccount;
+    if (account == null) return;
+    final l10n = state.l10n;
+    try {
+      final service = ExportService(db: state.db.db, usage: state.usageRepo);
+      final file = await service.exportRecordsCsv(account.id, state.keyNames);
+      await service.shareFile(
+        file,
+        text: 'QuotaRoom · ${account.name} records',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+    }
+  }
+
+  Future<void> _exportKeys(BuildContext context) async {
+    final state = context.read<AppState>();
+    final account = state.activeAccount;
+    if (account == null) return;
+    final l10n = state.l10n;
+    try {
+      final service = ExportService(db: state.db.db, usage: state.usageRepo);
+      final file = await service.exportKeysCsv(account.id, state.keyNames);
+      await service.shareFile(
+        file,
+        text: 'QuotaRoom · ${account.name} key summary',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+    }
+  }
+
+  Future<void> _backupDatabase(BuildContext context) async {
+    final state = context.read<AppState>();
+    final l10n = state.l10n;
+    try {
+      final service = ExportService(db: state.db.db, usage: state.usageRepo);
+      final file = await service.backupDatabase();
+      await service.shareFile(file, text: 'QuotaRoom database backup');
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+    }
+  }
+
+  Future<void> _restoreBackup(BuildContext context) async {
+    final state = context.read<AppState>();
+    final l10n = state.l10n;
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'QuotaRoom backup',
+          extensions: ['db', 'sqlite', 'sqlite3'],
+        ),
+      ],
+    );
+    if (file == null || !context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.t('restoreConfirmTitle')),
+        content: Text(l10n.t('restoreConfirmBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.t('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.t('backupRestore')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final bytes = await file.readAsBytes();
+      final restored = await state.restoreUsageFromBackup(bytes);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('restoreDone', {'n': fmtInt(restored)}))),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('restoreFailed')}: $e')));
+    }
+  }
+
+  Future<void> _shareSummary(BuildContext context) async {
+    final state = context.read<AppState>();
+    final l10n = state.l10n;
+    final data = state.dashboard;
+    if (data == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.t('shareSummaryEmpty'))));
+      return;
+    }
+    final range = switch (state.dashboardRange) {
+      'today' => l10n.t('today'),
+      '7d' => l10n.t('d7'),
+      '30d' => l10n.t('d30'),
+      _ => l10n.t('all'),
+    };
+    String quotaLabel(String label) => switch (label) {
+      '5h Rolling' => l10n.t('rolling'),
+      'Weekly' => l10n.t('weekly'),
+      'Monthly' => l10n.t('monthly'),
+      _ => label,
+    };
+    final lines = <String>[
+      'QuotaRoom · ${state.activeAccount?.name ?? ''}',
+      '${l10n.t('currentRange')}: $range',
+      '${l10n.t('totalCost')}: ${fmtMoney(data.totals.totalCostUsd, currency: state.currency, rate: state.usdCny)}',
+      '${l10n.t('totalTokens')}: ${fmtTokens(data.totals.totalTokens)}',
+      '${l10n.t('totalRequests')}: ${fmtInt(data.totals.requestCount)}',
+      '${l10n.t('hitRate')}: ${data.totals.hitRate.toStringAsFixed(1)}%',
+      for (final window in data.quota?.windows ?? const <QuotaWindow>[])
+        '${quotaLabel(window.label)}: ${l10n.t('used')} '
+            '${window.used.toStringAsFixed(1)}% · ${l10n.t('remaining')} '
+            '${window.remaining.toStringAsFixed(1)}%',
+      'https://github.com/StarryCognet/quotaroom',
+    ];
+    try {
+      await ExportService(
+        db: state.db.db,
+        usage: state.usageRepo,
+      ).shareText(lines.join('\n'));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+    }
   }
 
   Future<void> _openLogin(BuildContext context, {required bool relogin}) async {
@@ -223,9 +468,8 @@ class SettingsPage extends StatelessWidget {
     if (!confirmed) return;
     await state.logoutActive();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.t('loggedOut'))),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.t('loggedOut'))));
   }
 }
 
@@ -272,11 +516,7 @@ class _SettingsCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _InfoRow({required this.label, required this.value, this.valueColor});
 
   final String label;
   final String value;
@@ -343,11 +583,7 @@ class _ActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 18,
-              color: danger ? colors.red : colors.text2,
-            ),
+            Icon(icon, size: 18, color: danger ? colors.red : colors.text2),
             const SizedBox(width: 11),
             Expanded(
               child: Column(
@@ -371,11 +607,7 @@ class _ActionRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 19,
-              color: colors.text3,
-            ),
+            Icon(Icons.chevron_right_rounded, size: 19, color: colors.text3),
           ],
         ),
       ),
@@ -463,10 +695,7 @@ class _PillRow<T> extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 10.5, color: colors.text3),
-          ),
+          Text(subtitle, style: TextStyle(fontSize: 10.5, color: colors.text3)),
           const SizedBox(height: 9),
           PillSelector<T>(
             value: value,
@@ -520,10 +749,7 @@ class _FullSyncRow extends StatelessWidget {
           FilledButton(
             onPressed: running ? null : () => _startFullSync(context),
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               textStyle: const TextStyle(fontSize: 11.5),
             ),
             child: Text(l10n.t('startFullSync')),
@@ -548,9 +774,116 @@ class _FullSyncRow extends StatelessWidget {
     final text = result.ok
         ? '${l10n.t('syncDone')} · +${result.inserted}'
         : '${l10n.t('syncFailed')}: ${result.error ?? ''}';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _BudgetRow extends StatelessWidget {
+  const _BudgetRow({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = state.l10n;
+    final colors = context.colors;
+    final budget = state.settings.dailyBudgetUsd;
+    final label = budget == null
+        ? l10n.t('notSet')
+        : fmtMoney(budget, currency: state.currency, rate: state.usdCny);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.t('dailyBudget'),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.text,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.t('dailyBudgetDesc'),
+                  style: TextStyle(fontSize: 10.5, color: colors.text3),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(
+            onPressed: () => _edit(context),
+            child: Text(label, style: const TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
     );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final l10n = state.l10n;
+    final current = state.settings.dailyBudgetUsd;
+    final display = current == null
+        ? ''
+        : (state.currency == 'CNY' ? current * state.usdCny : current)
+              .toStringAsFixed(2);
+    final controller = TextEditingController(text: display);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.t('dailyBudgetEdit')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: l10n.t('dailyBudget'),
+            hintText: l10n.t('budgetInputHint', {'currency': state.currency}),
+            prefixText: state.currency == 'CNY' ? '¥ ' : '\$ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.t('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop('__clear__'),
+            child: Text(l10n.t('clear')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text(l10n.t('save')),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    if (result == '__clear__') {
+      await state.setDailyBudget(null);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.t('budgetCleared'))));
+      return;
+    }
+    final value = double.tryParse(result.trim().replaceAll(',', '.'));
+    if (value == null || value <= 0) {
+      await state.setDailyBudget(null);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.t('budgetCleared'))));
+      return;
+    }
+    final usd = state.currency == 'CNY' ? value / state.usdCny : value;
+    await state.setDailyBudget(usd);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.t('budgetSaved'))));
   }
 }
 
@@ -569,6 +902,167 @@ class _VersionRow extends StatelessWidget {
             : '1.0.0';
         return _InfoRow(label: l10n.t('currentVersion'), value: version);
       },
+    );
+  }
+}
+
+class _UpdateRow extends StatefulWidget {
+  const _UpdateRow({required this.l10n, required this.state});
+
+  final L10n l10n;
+  final AppState state;
+
+  @override
+  State<_UpdateRow> createState() => _UpdateRowState();
+}
+
+class _UpdateRowState extends State<_UpdateRow> {
+  bool _busy = false;
+
+  Future<void> _check() async {
+    final l10n = widget.l10n;
+    setState(() => _busy = true);
+    try {
+      final info = await UpdateService().check();
+      if (!mounted) return;
+      if (!info.hasUpdate) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('updateNone'))));
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(l10n.t('updateFound')),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${l10n.t('currentVersion')}: ${info.current}'),
+                Text('${l10n.t('updateLatest')}: ${info.latest}'),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.t('releaseNotes'),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  info.notes.isEmpty ? l10n.t('noReleaseNotes') : info.notes,
+                  style: const TextStyle(fontSize: 11.5, height: 1.6),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.t('close')),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                if (info.releaseUrl.isNotEmpty) {
+                  launchUrl(
+                    Uri.parse(info.releaseUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                }
+              },
+              child: Text(l10n.t('goDownload')),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${l10n.t('updateFailed')}: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ActionRow(
+      label: widget.l10n.t('checkUpdate'),
+      subtitle: _busy
+          ? widget.l10n.t('checkingUpdate')
+          : widget.l10n.t('checkUpdateDesc'),
+      icon: Icons.system_update_alt_rounded,
+      onTap: _busy ? () {} : _check,
+    );
+  }
+}
+
+class _SyncLogRow extends StatelessWidget {
+  const _SyncLogRow({required this.entry, required this.l10n});
+
+  final Map<String, Object?> entry;
+  final L10n l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final ok = entry['ok'] == true;
+    final partial = entry['partial'] == true;
+    final error = (entry['error'] ?? '').toString();
+    final inserted = (entry['inserted'] as num?)?.toInt() ?? 0;
+    final account = (entry['account'] ?? '').toString();
+    final mode = entry['mode'] == 'full'
+        ? l10n.t('fullSyncMode')
+        : l10n.t('incrementalMode');
+    final color = ok ? (partial ? colors.amber : colors.green) : colors.red;
+    final status = ok
+        ? (partial ? l10n.t('syncStatusPartial') : l10n.t('syncStatusOk'))
+        : l10n.t('syncStatusError');
+    final at = DateTime.tryParse((entry['at'] ?? '').toString())?.toLocal();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.only(top: 5),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$status · $mode',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$account · ${fmtDateTimeShort(at)} · $inserted ${l10n.t('items')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 9.5, color: colors.text3),
+                ),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    error,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 9.5, color: colors.red),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

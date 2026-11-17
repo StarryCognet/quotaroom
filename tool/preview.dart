@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:quotaroom/app.dart';
 import 'package:quotaroom/data/account_repository.dart';
 import 'package:quotaroom/data/app_database.dart';
+import 'package:quotaroom/data/background_sync.dart';
 import 'package:quotaroom/data/fx_service.dart';
 import 'package:quotaroom/data/models.dart';
 import 'package:quotaroom/data/opencode_api.dart';
@@ -17,6 +18,7 @@ import 'package:quotaroom/state/app_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:workmanager/workmanager.dart';
 
 /// Developer-only entry point: seeds a month of demo data so every page can be
 /// inspected without a real opencode.ai account.
@@ -25,6 +27,11 @@ import 'package:sqflite/sqflite.dart';
 ///   flutter run -t tool/preview.dart -d `device`
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Workmanager().initialize(backgroundSyncDispatcher);
+  } catch (_) {
+    // Preview on desktop: WorkManager is Android-only.
+  }
   final path = p.join(await getDatabasesPath(), 'quotaroom_preview.db');
   await deleteDatabase(path);
   final database = await AppDatabase.open(path: path);

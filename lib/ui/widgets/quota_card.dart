@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
+import '../../core/quota_pacing.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import 'common.dart';
@@ -121,6 +122,14 @@ class _QuotaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final pacing = computeQuotaPacing(window);
+    final paceColor = pacing == null
+        ? colors.text3
+        : pacing.willExhaustBeforeReset || pacing.pace > 1.25
+        ? colors.red
+        : pacing.pace > 1.05
+        ? colors.amber
+        : colors.green;
     final remaining = window.remaining;
     final health = remaining < 20
         ? colors.red
@@ -162,6 +171,29 @@ class _QuotaRow extends StatelessWidget {
                   ),
                 ),
               ),
+              if (pacing != null && window.used > 0) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: paceColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    l10n.t('paceShort', {
+                      'n': pacing.pace.toStringAsFixed(1),
+                    }),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: paceColor,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Text(
                 '${_pct(window.used)} ${l10n.t('used')}',
@@ -202,6 +234,27 @@ class _QuotaRow extends StatelessWidget {
               ),
             ],
           ),
+          if (pacing != null && window.used >= 99.5) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.t('quotaExhausted'),
+              style: TextStyle(fontSize: 9.5, color: colors.red),
+            ),
+          ] else if (pacing != null && pacing.willExhaustBeforeReset) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.t('etaExhaust', {
+                'duration': fmtDur(
+                  pacing.etaSeconds ?? 0,
+                  dUnit: l10n.t('dUnit'),
+                  hUnit: l10n.t('hUnit'),
+                  mUnit: l10n.t('mUnit'),
+                  soon: l10n.t('soon'),
+                ),
+              }),
+              style: TextStyle(fontSize: 9.5, color: paceColor),
+            ),
+          ],
         ],
       ),
     );

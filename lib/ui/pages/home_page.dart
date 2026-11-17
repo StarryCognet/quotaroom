@@ -104,6 +104,13 @@ class HomePage extends StatelessWidget {
             l10n: l10n,
             onRetry: () => state.refreshDashboard(forceQuota: true),
           ),
+          if (state.settings.dailyBudgetUsd != null) ...[
+            const SizedBox(height: 10),
+            _DailyBudgetCard(
+              state: state,
+              todayCost: data.today.totalCostUsd,
+            ),
+          ],
           const SizedBox(height: 14),
           Text(
             l10n.t('overviewTitle'),
@@ -214,6 +221,103 @@ class _KpiGrid extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _DailyBudgetCard extends StatelessWidget {
+  const _DailyBudgetCard({required this.state, required this.todayCost});
+
+  final AppState state;
+  final double todayCost;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final l10n = state.l10n;
+    final budget = state.settings.dailyBudgetUsd ?? 0;
+    final ratio = budget > 0 ? (todayCost / budget).clamp(0.0, 1.0) : 0.0;
+    final over = todayCost > budget;
+    final color = over
+        ? colors.red
+        : (ratio >= 0.8 ? colors.amber : colors.green);
+    final remaining = budget - todayCost;
+    final status = over
+        ? '${l10n.t('budgetOver')} ${fmtMoney(
+            -remaining,
+            currency: state.currency,
+            rate: state.usdCny,
+          )}'
+        : '${l10n.t('remaining')} ${fmtMoney(
+            remaining,
+            currency: state.currency,
+            rate: state.usdCny,
+          )}';
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.savings_outlined, size: 16, color: color),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  l10n.t('dailyBudget'),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                status,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 5,
+              backgroundColor: colors.muted,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              Text(
+                '${l10n.t('budgetUsed')} ${fmtMoney(
+                  todayCost,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                )}',
+                style: TextStyle(fontSize: 10.5, color: colors.text3),
+              ),
+              const Spacer(),
+              Text(
+                '${l10n.t('dailyBudget')} ${fmtMoney(
+                  budget,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                )}',
+                style: TextStyle(fontSize: 10.5, color: colors.text3),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

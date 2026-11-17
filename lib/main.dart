@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'app.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
+import 'data/background_sync.dart';
 import 'data/fx_service.dart';
 import 'data/opencode_api.dart';
 import 'data/prefs.dart';
@@ -17,6 +19,11 @@ import 'state/app_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Workmanager().initialize(backgroundSyncDispatcher);
+  } catch (e) {
+    debugPrint('QuotaRoom WorkManager init failed: $e');
+  }
   try {
     final database = await AppDatabase.open();
     final prefs = await Prefs.load();
@@ -48,10 +55,7 @@ Future<void> main() async {
     );
     unawaited(state.init());
     runApp(
-      ChangeNotifierProvider.value(
-        value: state,
-        child: const QuotaRoomApp(),
-      ),
+      ChangeNotifierProvider.value(value: state, child: const QuotaRoomApp()),
     );
   } catch (error, stack) {
     debugPrint('QuotaRoom init failed: $error\n$stack');

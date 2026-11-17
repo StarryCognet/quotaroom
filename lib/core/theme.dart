@@ -100,6 +100,31 @@ class AppColors extends ThemeExtension<AppColors> {
     isDark: true,
   );
 
+  static const amoled = AppColors(
+    bg: Color(0xFF000000),
+    card: Color(0xFF0B0B0E),
+    border: Color(0xFF24222C),
+    text: Color(0xFFE9E6F5),
+    text2: Color(0xFFA8A3C0),
+    text3: Color(0xFF8C86A6),
+    primary: Color(0xFF9D7CF8),
+    primaryStrong: Color(0xFF8B6CF6),
+    primarySoft: Color(0xFF221C38),
+    blue: Color(0xFF4F8EF7),
+    green: Color(0xFF22C55E),
+    purple: Color(0xFFA78BFA),
+    cyan: Color(0xFF06B6D4),
+    amber: Color(0xFFD97706),
+    red: Color(0xFFEF4444),
+    dangerSoft: Color(0xFF3D2429),
+    muted: Color(0xFF15141A),
+    hover: Color(0xFF1E1B26),
+    grid: Color(0xFF24222C),
+    sidebar: Color(0xFF050506),
+    titlebar: Color(0xFF0B0B0E),
+    isDark: true,
+  );
+
   @override
   AppColors copyWith({
     Color? bg,
@@ -205,8 +230,10 @@ const List<BoxShadow> cardShadowDark = [
 List<BoxShadow> cardShadowFor(AppColors c) =>
     c.isDark ? cardShadowDark : cardShadowLight;
 
-ThemeData buildAppTheme(Brightness brightness) {
-  final c = brightness == Brightness.dark ? AppColors.dark : AppColors.light;
+ThemeData buildAppTheme(Brightness brightness, {bool amoled = false}) {
+  final c = brightness == Brightness.dark
+      ? (amoled ? AppColors.amoled : AppColors.dark)
+      : AppColors.light;
   final scheme = ColorScheme.fromSeed(
     seedColor: c.primary,
     brightness: brightness,

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/quotaroom_widget_background"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="QuotaRoom"
+            android:textColor="#B7A6FF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.02" />
+
+        <TextView
+            android:id="@+id/widget_updated"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#8F96AD"
+            android:textSize="9.5sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_account"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:text="QuotaRoom"
+        android:textColor="#E8EAF4"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_q1_label"
+            android:layout_width="34dp"
+            android:layout_height="wrap_content"
+            android:text="5h"
+            android:textColor="#C9CEE2"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/widget_q1_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/quotaroom_widget_progress" />
+
+        <TextView
+            android:id="@+id/widget_q1_pct"
+            android:layout_width="38dp"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_q2_label"
+            android:layout_width="34dp"
+            android:layout_height="wrap_content"
+            android:text="周"
+            android:textColor="#C9CEE2"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/widget_q2_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/quotaroom_widget_progress" />
+
+        <TextView
+            android:id="@+id/widget_q2_pct"
+            android:layout_width="38dp"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="7dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_q3_label"
+            android:layout_width="34dp"
+            android:layout_height="wrap_content"
+            android:text="月"
+            android:textColor="#C9CEE2"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/widget_q3_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/quotaroom_widget_progress" />
+
+        <TextView
+            android:id="@+id/widget_q3_pct"
+            android:layout_width="38dp"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/qr_today_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="今日"
+            android:textColor="#8F96AD"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/qr_today_cost"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:text="—"
+            android:textColor="#E8EAF4"
+            android:textSize="11.5sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/qr_today_tokens"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="—"
+            android:textColor="#8F96AD"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/qr_today_meta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text=""
+            android:textColor="#8F96AD"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:gravity="end" />
+    </LinearLayout>
+</LinearLayout>

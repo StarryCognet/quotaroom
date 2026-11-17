@@ -5,13 +5,17 @@ import 'package:flutter/material.dart';
 import '../core/i18n.dart';
 import '../data/account_repository.dart';
 import '../data/app_database.dart';
+import '../data/background_sync.dart';
+import '../data/export_service.dart';
 import '../data/fx_service.dart';
 import '../data/models.dart';
+import '../data/notification_service.dart';
 import '../data/opencode_api.dart';
 import '../data/prefs.dart';
 import '../data/settings_repository.dart';
 import '../data/sync_service.dart';
 import '../data/usage_repository.dart';
+import '../data/widget_service.dart';
 
 /// Single app-wide state holder. Repositories stay synchronous/awaited; this
 /// class exposes the data each page needs and notifies listeners.
@@ -25,7 +29,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     required this.usageRepo,
     required this.syncService,
     required this.fxService,
-  });
+    NotificationService? notifications,
+    WidgetService? widgetService,
+  }) : notifications = notifications ?? NotificationService(),
+       widgetService = widgetService ?? WidgetService();
 
   final AppDatabase db;
   final OpenCodeApi api;
@@ -35,6 +42,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   final UsageRepository usageRepo;
   final SyncService syncService;
   final FxService fxService;
+  final NotificationService notifications;
+  final WidgetService widgetService;
 
   bool initialized = false;
   bool loading = true;
@@ -50,6 +59,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, String> keyNames = const {};
   SyncProgress progress = SyncProgress.idle;
   SyncResult? lastSyncResult;
+  List<Map<String, Object?>> syncLog = const [];
 
   String dashboardRange = 'today';
   String language = 'zh';
@@ -63,8 +73,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   L10n get l10n => L10n(language);
 
-  bool get hasLoggedInAccount =>
-      accounts.any((account) => account.hasToken);
+  bool get hasLoggedInAccount => accounts.any((account) => account.hasToken);
 
   bool get isLoggedIn => activeAccount?.hasToken == true;
 
@@ -87,8 +96,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     try {
       settings = await settingsRepo.getSettings();
       keyNames = await settingsRepo.getKeyNames();
+      syncLog = await settingsRepo.getSyncLog();
+      await notifications.init();
       await reloadAccounts();
       await _ensureActiveLoggedIn();
+      unawaited(configureBackgroundSync(this));
       _progressSubscription = syncService.progressStream.listen((value) {
         progress = value;
         notifyListeners();
@@ -112,6 +124,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           // Overview is secondary; the dashboard is already usable.
         }
         startAutoSync();
+      } else {
+        unawaited(widgetService.clear(language: language));
       }
       initError = null;
     } catch (e) {
@@ -157,17 +171,27 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       // Local aggregates first so a slow quota request never blocks the page.
       final totals = await usageRepo.totals(account.id, dashboardRange);
       final today = await usageRepo.totals(account.id, 'today');
-      final daily7 = fillDays(
-        await usageRepo.dailyStats(account.id, 7),
-        7,
-      );
-      final trend30 = fillDays(
-        await usageRepo.dailyStats(account.id, 30),
-        30,
-      );
+      final daily7 = fillDays(await usageRepo.dailyStats(account.id, 7), 7);
+      final trend30 = fillDays(await usageRepo.dailyStats(account.id, 30), 30);
       final todayTrend = await usageRepo.todayTrend(account.id);
       final models = await usageRepo.modelStats(account.id, dashboardRange);
       final sync = await usageRepo.syncState(account.id);
+      final previous = _previousRange();
+      final previousTotals = previous.fromMs != null
+          ? await usageRepo.totalsBetween(
+              account.id,
+              fromMs: previous.fromMs,
+              toMs: previous.toMs,
+            )
+          : Totals.zero;
+      final modelKeys = await usageRepo.modelKeyStats(
+        account.id,
+        dashboardRange,
+      );
+      final topExpensive = await usageRepo.topExpensive(
+        account.id,
+        dashboardRange,
+      );
       dashboard = DashboardData(
         range: dashboardRange,
         totals: totals,
@@ -176,6 +200,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         trend30: trend30,
         todayTrend: todayTrend,
         models: models,
+        modelKeys: modelKeys,
+        topExpensive: topExpensive,
+        previousTotals: previousTotals,
+        previousRange: previous.label,
         quota: syncService.peekQuota(account.id),
         sync: sync,
         accountName: account.name,
@@ -183,12 +211,46 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       errorMessage = null;
       loadingDashboard = false;
       notifyListeners();
+      unawaited(_publishWidget());
+      unawaited(_evaluateNotifications());
       unawaited(_refreshQuota(account, forceQuota));
     } catch (e) {
       loadingDashboard = false;
       errorMessage = e.toString();
       notifyListeners();
     }
+  }
+
+  Future<void> _publishWidget() async {
+    final data = dashboard;
+    final account = activeAccount;
+    if (data == null || account == null) return;
+    await widgetService.update(
+      accountName: account.name,
+      quota: data.quota,
+      today: data.today,
+      language: language,
+      currency: currency,
+      usdCny: usdCny,
+      syncError: errorMessage,
+    );
+  }
+
+  Future<void> _evaluateNotifications() async {
+    if (!settings.notificationsEnabled) return;
+    final data = dashboard;
+    final account = activeAccount;
+    if (data == null || account == null) return;
+    await notifications.evaluate(
+      enabled: true,
+      language: language,
+      accountName: account.name,
+      quota: data.quota,
+      today: data.today,
+      dailyBudgetUsd: settings.dailyBudgetUsd,
+      currency: currency,
+      usdCny: usdCny,
+    );
   }
 
   Future<void> _refreshQuota(Account account, bool force) async {
@@ -199,6 +261,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       if (current == null) return;
       dashboard = current.copyWith(quota: quota);
       notifyListeners();
+      unawaited(_publishWidget());
+      unawaited(_evaluateNotifications());
     } catch (_) {
       // Keep the cached quota; a transient quota error must not blank the page.
     }
@@ -212,10 +276,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         final quota = await syncService.quotaFor(account);
         final today = await usageRepo.totals(account.id, 'today');
         final todayTrend = await usageRepo.todayTrend(account.id);
-        final daily7 = fillDays(
-          await usageRepo.dailyStats(account.id, 7),
-          7,
-        );
+        final daily7 = fillDays(await usageRepo.dailyStats(account.id, 7), 7);
         final sync = await usageRepo.syncState(account.id);
         result.add(
           AccountOverview(
@@ -265,6 +326,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final result = full
         ? await syncService.syncFull()
         : await syncService.syncIncremental();
+    await _logSync(result, full ? 'full' : 'incremental');
     lastSyncResult = result;
     if (result.ok) {
       try {
@@ -334,6 +396,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _backgroundFullSync() async {
     try {
       final result = await syncService.syncFull();
+      await _logSync(result, 'full');
       lastSyncResult = result;
       if (result.ok) {
         keyNames = await settingsRepo.getKeyNames();
@@ -372,6 +435,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       await refreshDashboard(forceQuota: true);
     } else {
       dashboard = null;
+      unawaited(widgetService.clear(language: language));
     }
     await refreshOverviews();
     startAutoSync();
@@ -395,6 +459,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       dashboard = null;
       overviews = const [];
+      unawaited(widgetService.clear(language: language));
     }
     startAutoSync();
     notifyListeners();
@@ -417,6 +482,99 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  ({int? fromMs, int? toMs, String? label}) _previousRange() {
+    final now = DateTime.now();
+    switch (dashboardRange) {
+      case 'today':
+        final todayStart = DateTime(now.year, now.month, now.day);
+        final prevStart = todayStart.subtract(const Duration(days: 1));
+        return (
+          fromMs: prevStart.millisecondsSinceEpoch,
+          toMs: todayStart.millisecondsSinceEpoch,
+          label: 'yesterday',
+        );
+      case '7d':
+        return (
+          fromMs: now.subtract(const Duration(days: 14)).millisecondsSinceEpoch,
+          toMs: now.subtract(const Duration(days: 7)).millisecondsSinceEpoch,
+          label: 'prev7d',
+        );
+      case '30d':
+        return (
+          fromMs: now.subtract(const Duration(days: 60)).millisecondsSinceEpoch,
+          toMs: now.subtract(const Duration(days: 30)).millisecondsSinceEpoch,
+          label: 'prev30d',
+        );
+      default:
+        return (fromMs: null, toMs: null, label: null);
+    }
+  }
+
+  Future<void> _logSync(SyncResult result, String mode) async {
+    try {
+      await settingsRepo.addSyncLog({
+        'at': DateTime.now().toUtc().toIso8601String(),
+        'mode': mode,
+        'ok': result.ok,
+        'partial': result.partial,
+        'inserted': result.inserted,
+        'error': result.error ?? '',
+        'account': activeAccount?.name ?? '',
+      });
+      syncLog = await settingsRepo.getSyncLog();
+    } catch (_) {
+      // Logging must never break the sync flow.
+    }
+  }
+
+  /// Merges usage history from a `.db` backup into the active account. Tokens
+  /// stay untouched because backups never contain credentials.
+  Future<int> restoreUsageFromBackup(List<int> bytes) async {
+    final account = activeAccount;
+    if (account == null) {
+      throw const OpenCodeApiException('没有可恢复数据的账号');
+    }
+    final service = ExportService(db: db.db, usage: usageRepo);
+    final restored = await service.restoreUsageFromBytes(account.id, bytes);
+    syncService.clearQuotaCache(account.id);
+    keyNames = await settingsRepo.getKeyNames();
+    await refreshDashboard(forceQuota: true);
+    await refreshOverviews();
+    notifyListeners();
+    return restored;
+  }
+
+  Future<void> setDailyBudget(double? usd) async {
+    final value = usd != null && usd > 0 ? usd : null;
+    final next = settings.copyWith(
+      dailyBudgetUsd: value,
+      clearDailyBudget: value == null,
+    );
+    settings = await settingsRepo.saveSettings(next);
+    notifyListeners();
+  }
+
+  Future<bool> setNotificationsEnabled(bool value) async {
+    var enabled = value;
+    if (value && !await notifications.requestPermission()) {
+      enabled = false;
+    }
+    final next = settings.copyWith(notificationsEnabled: enabled);
+    settings = await settingsRepo.saveSettings(next);
+    notifyListeners();
+    return enabled;
+  }
+
+  Future<bool> sendTestNotification() {
+    return notifications.showTest(language: language);
+  }
+
+  Future<void> setAmoled(bool value) async {
+    final next = settings.copyWith(amoled: value);
+    settings = await settingsRepo.saveSettings(next);
+    notifyListeners();
+  }
+
   Future<void> setWindowDays(int? value) async {
     final next = settings.copyWith(
       windowDays: value,
@@ -430,6 +588,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     language = value == 'en' ? 'en' : 'zh';
     await prefs.setLanguage(language);
     notifyListeners();
+    unawaited(_publishWidget());
   }
 
   Future<void> setThemeMode(String value) async {
@@ -443,7 +602,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> toggleTheme() async {
-    final isDark = themeMode == 'dark' ||
+    final isDark =
+        themeMode == 'dark' ||
         (themeMode == 'system' &&
             WidgetsBinding.instance.platformDispatcher.platformBrightness ==
                 Brightness.dark);
@@ -454,6 +614,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     currency = value == 'USD' ? 'USD' : 'CNY';
     await prefs.setCurrency(currency);
     notifyListeners();
+    unawaited(_publishWidget());
   }
 
   Future<void> refreshFx({bool force = false}) async {
@@ -464,6 +625,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void startAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = null;
+    unawaited(configureBackgroundSync(this));
     if (!settings.autoSync || !hasLoggedInAccount) return;
     final seconds = settings.syncIntervalSec.clamp(30, 3600).toInt();
     _autoSyncTimer = Timer.periodic(Duration(seconds: seconds), (_) {
@@ -475,7 +637,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    if (!settings.autoSync || !hasLoggedInAccount || syncing) return;
+    unawaited(_refreshAfterResume());
+  }
+
+  Future<void> _refreshAfterResume() async {
+    if (!hasLoggedInAccount) return;
+    try {
+      syncLog = await settingsRepo.getSyncLog();
+      notifyListeners();
+    } catch (_) {
+      // Keep the last known log.
+    }
+    final account = activeAccount;
+    if (account == null) return;
+    try {
+      final persisted = await usageRepo.syncState(account.id);
+      final current = dashboard?.sync.lastSyncAt;
+      if (current == null ||
+          (persisted.lastSyncAt?.isAfter(current) ?? false)) {
+        await refreshDashboard();
+      }
+    } catch (_) {
+      // The regular sync below will retry.
+    }
+    if (!settings.autoSync || syncing) return;
     final last = dashboard?.sync.lastSyncAt;
     final interval = Duration(
       seconds: settings.syncIntervalSec.clamp(30, 3600).toInt(),

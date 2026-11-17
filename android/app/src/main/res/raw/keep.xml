@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- flutter_local_notifications resolves the small icon by resource name at
+     runtime, so the release resource shrinker must not remove it. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_quotaroom" />

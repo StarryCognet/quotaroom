@@ -133,7 +133,14 @@ void main() {
     await repo.insertUsageRecords([
       _rec(id: 'a', at: now, key: 'sk_a', input: 100, output: 50, reasoning: 0),
       _rec(id: 'b', at: now, key: 'sk_a', input: 50, output: 20, reasoning: 0),
-      _rec(id: 'c', at: now, key: 'sk_b', input: 500, output: 100, reasoning: 0),
+      _rec(
+        id: 'c',
+        at: now,
+        key: 'sk_b',
+        input: 500,
+        output: 100,
+        reasoning: 0,
+      ),
       _rec(id: 'd', at: now, key: '', input: 10, output: 5, reasoning: 0),
     ], accountId);
     final stats = await repo.keyStats(accountId);
@@ -201,16 +208,101 @@ void main() {
       _rec(id: 'a', at: now),
       _rec(id: 'b', at: now),
     ], accountId);
-    await repo.updateSyncState(
-      accountId,
-      status: 'ok',
-      inserted: 2,
-    );
+    await repo.updateSyncState(accountId, status: 'ok', inserted: 2);
     final state = await repo.syncState(accountId);
     expect(state.lastSyncStatus, 'ok');
     expect(state.lastInsertedCount, 2);
     expect(state.totalRecords, 2);
     expect(state.newestRecordAt, isNotNull);
     expect(state.oldestRecordAt, isNotNull);
+  });
+
+  test('totalsBetween uses a half-open time window', () async {
+    final base = DateTime.now().subtract(const Duration(hours: 5));
+    await repo.insertUsageRecords([
+      _rec(id: 'before', at: base.subtract(const Duration(minutes: 1))),
+      _rec(id: 'start', at: base, input: 10),
+      _rec(id: 'inside', at: base.add(const Duration(hours: 1)), input: 20),
+      _rec(id: 'end', at: base.add(const Duration(hours: 2)), input: 40),
+    ], accountId);
+    final totals = await repo.totalsBetween(
+      accountId,
+      fromMs: base.millisecondsSinceEpoch,
+      toMs: base.add(const Duration(hours: 2)).millisecondsSinceEpoch,
+    );
+    expect(totals.requestCount, 2);
+    expect(totals.totalInputTokens, 30);
+  });
+
+  test('model-key matrix groups and limits by token volume', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'a', at: now, model: 'm1', key: 'sk_a', input: 100),
+      _rec(id: 'b', at: now, model: 'm1', key: 'sk_a', input: 50),
+      _rec(id: 'c', at: now, model: 'm1', key: 'sk_b', input: 900),
+      _rec(id: 'd', at: now, model: 'm2', key: 'sk_b', input: 300),
+    ], accountId);
+    final stats = await repo.modelKeyStats(accountId, 'all');
+    expect(stats, hasLength(3));
+    expect(stats.first.model, 'm1');
+    expect(stats.first.keyId, 'sk_b');
+    expect(stats.first.totalTokens, 960);
+    final topOne = await repo.modelKeyStats(accountId, 'all', limit: 1);
+    expect(topOne, hasLength(1));
+  });
+
+  test('top expensive requests order by cost', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'cheap', at: now, cost: 0.001),
+      _rec(id: 'pricey', at: now, cost: 0.5),
+      _rec(id: 'middle', at: now, cost: 0.05),
+    ], accountId);
+    final top = await repo.topExpensive(accountId, 'all', limit: 2);
+    expect(top.map((record) => record.usgId), ['pricey', 'middle']);
+  });
+
+  test('key daily tokens zero-fills seven days per key', () async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 12);
+    await repo.insertUsageRecords([
+      _rec(id: 'today', at: today, key: 'sk_a', input: 100, output: 20),
+      _rec(
+        id: 'old',
+        at: today.subtract(const Duration(days: 3)),
+        key: 'sk_a',
+        input: 50,
+      ),
+      _rec(
+        id: 'out',
+        at: today.subtract(const Duration(days: 9)),
+        key: 'sk_old',
+        input: 70,
+      ),
+    ], accountId);
+    final series = await repo.keyDailyTokens(accountId);
+    expect(series.keys, contains('sk_a'));
+    expect(series.keys, isNot(contains('sk_old')));
+    expect(series['sk_a'], hasLength(7));
+    expect(series['sk_a']!.last, 130);
+    expect(series['sk_a']![3], 110);
+    expect(series['sk_a']!.first, 0);
+  });
+
+  test('records page filters by key and free-text query', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'a', at: now, model: 'qwen3', key: 'sk_a', session: 'sess_1'),
+      _rec(id: 'b', at: now, model: 'glm', key: 'sk_b', session: 'sess_2'),
+      _rec(id: 'c', at: now, model: 'glm', key: '', session: 'sess_3'),
+    ], accountId);
+    final byKey = await repo.recordsPage(accountId, keyId: 'sk_a');
+    expect(byKey.records.single.usgId, 'a');
+    final unassigned = await repo.recordsPage(accountId, keyId: '');
+    expect(unassigned.records.single.usgId, 'c');
+    final query = await repo.recordsPage(accountId, query: 'sess_2');
+    expect(query.records.single.usgId, 'b');
+    final modelQuery = await repo.recordsPage(accountId, query: 'qwen');
+    expect(modelQuery.total, 1);
   });
 }

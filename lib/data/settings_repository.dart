@@ -95,6 +95,34 @@ class SettingsRepository {
     await writePayload(raw);
   }
 
+  Future<void> addSyncLog(Map<String, Object?> entry) async {
+    final raw = await rawPayload();
+    final list = <Map<String, Object?>>[];
+    final existing = raw['sync_log'];
+    if (existing is List) {
+      for (final item in existing) {
+        if (item is Map) list.add(item.cast<String, Object?>());
+      }
+    }
+    list.insert(0, entry);
+    if (list.length > 30) {
+      list.removeRange(30, list.length);
+    }
+    raw['sync_log'] = list;
+    await writePayload(raw);
+  }
+
+  Future<List<Map<String, Object?>>> getSyncLog() async {
+    final raw = await rawPayload();
+    final existing = raw['sync_log'];
+    if (existing is! List) return const [];
+    final result = <Map<String, Object?>>[];
+    for (final item in existing) {
+      if (item is Map) result.add(item.cast<String, Object?>());
+    }
+    return result;
+  }
+
   Future<FxCache> getFxCache() async {
     final raw = await rawPayload();
     final rate = (raw['fx_rate'] as num?)?.toDouble() ?? 7.2;

@@ -129,8 +129,7 @@ class UsageRecord {
 
   int get createdMs => createdAt.millisecondsSinceEpoch;
   int get cacheWriteTokens => cacheWrite5mTokens + cacheWrite1hTokens;
-  int get totalInputTokens =>
-      inputTokens + cacheReadTokens + cacheWriteTokens;
+  int get totalInputTokens => inputTokens + cacheReadTokens + cacheWriteTokens;
   int get totalTokens => totalInputTokens + outputTokens + reasoningTokens;
 
   Map<String, Object?> toDbMap({
@@ -172,10 +171,8 @@ class UsageRecord {
       outputTokens: (row['output_tokens'] as num?)?.toInt() ?? 0,
       reasoningTokens: (row['reasoning_tokens'] as num?)?.toInt() ?? 0,
       cacheReadTokens: (row['cache_read_tokens'] as num?)?.toInt() ?? 0,
-      cacheWrite5mTokens:
-          (row['cache_write_5m_tokens'] as num?)?.toInt() ?? 0,
-      cacheWrite1hTokens:
-          (row['cache_write_1h_tokens'] as num?)?.toInt() ?? 0,
+      cacheWrite5mTokens: (row['cache_write_5m_tokens'] as num?)?.toInt() ?? 0,
+      cacheWrite1hTokens: (row['cache_write_1h_tokens'] as num?)?.toInt() ?? 0,
       costRaw: (row['cost_raw'] as num?)?.toInt() ?? 0,
       costUsd: (row['cost_usd'] as num?)?.toDouble() ?? 0,
       keyId: (row['key_id'] ?? '').toString(),
@@ -257,6 +254,22 @@ class ModelStat {
 
   int get totalTokens =>
       totalInputTokens + totalOutputTokens + totalReasoningTokens;
+}
+
+class ModelKeyStat {
+  const ModelKeyStat({
+    required this.model,
+    required this.keyId,
+    this.requestCount = 0,
+    this.totalTokens = 0,
+    this.totalCostUsd = 0,
+  });
+
+  final String model;
+  final String keyId;
+  final int requestCount;
+  final int totalTokens;
+  final double totalCostUsd;
 }
 
 class DailyStat {
@@ -444,12 +457,18 @@ class Settings {
     this.windowDays = 60,
     this.autoSync = true,
     this.showAccountsPanel = false,
+    this.dailyBudgetUsd,
+    this.notificationsEnabled = false,
+    this.amoled = false,
   });
 
   final int syncIntervalSec;
   final int? windowDays;
   final bool autoSync;
   final bool showAccountsPanel;
+  final double? dailyBudgetUsd;
+  final bool notificationsEnabled;
+  final bool amoled;
 
   Settings copyWith({
     int? syncIntervalSec,
@@ -457,26 +476,43 @@ class Settings {
     bool clearWindowDays = false,
     bool? autoSync,
     bool? showAccountsPanel,
+    double? dailyBudgetUsd,
+    bool clearDailyBudget = false,
+    bool? notificationsEnabled,
+    bool? amoled,
   }) => Settings(
     syncIntervalSec: syncIntervalSec ?? this.syncIntervalSec,
     windowDays: clearWindowDays ? null : (windowDays ?? this.windowDays),
     autoSync: autoSync ?? this.autoSync,
     showAccountsPanel: showAccountsPanel ?? this.showAccountsPanel,
+    dailyBudgetUsd: clearDailyBudget
+        ? null
+        : (dailyBudgetUsd ?? this.dailyBudgetUsd),
+    notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    amoled: amoled ?? this.amoled,
   );
 
   factory Settings.fromJson(Map<String, Object?> json) {
     final interval = (json['sync_interval_sec'] as num?)?.toInt() ?? 300;
     final window = json['window_days'];
-    final windowDays = switch (window) {
-      null => null,
-      final num n => n.toInt().clamp(1, 3650).toInt(),
-      _ => _parseWindowDays(window.toString()),
-    };
+    // Missing key = fresh install, use the 60-day default. An explicit null
+    // means the user picked "all history".
+    final windowDays = !json.containsKey('window_days')
+        ? 60
+        : switch (window) {
+            null => null,
+            final num n => n.toInt().clamp(1, 3650).toInt(),
+            _ => _parseWindowDays(window.toString()),
+          };
+    final budget = (json['daily_budget_usd'] as num?)?.toDouble();
     return Settings(
       syncIntervalSec: interval.clamp(30, 3600).toInt(),
       windowDays: windowDays,
       autoSync: json['auto_sync'] != false,
       showAccountsPanel: json['show_accounts_panel'] == true,
+      dailyBudgetUsd: budget != null && budget > 0 ? budget : null,
+      notificationsEnabled: json['notifications_enabled'] == true,
+      amoled: json['amoled'] == true,
     );
   }
 
@@ -485,6 +521,9 @@ class Settings {
     'window_days': windowDays,
     'auto_sync': autoSync,
     'show_accounts_panel': showAccountsPanel,
+    'daily_budget_usd': dailyBudgetUsd,
+    'notifications_enabled': notificationsEnabled,
+    'amoled': amoled,
   };
 }
 
@@ -544,6 +583,10 @@ class DashboardData {
     this.trend30 = const [],
     this.todayTrend = const [],
     this.models = const [],
+    this.modelKeys = const [],
+    this.topExpensive = const [],
+    this.previousTotals = Totals.zero,
+    this.previousRange,
     this.quota,
     this.sync = SyncState.empty,
     this.accountName = '',
@@ -556,6 +599,10 @@ class DashboardData {
   final List<DailyStat> trend30;
   final List<HourPoint> todayTrend;
   final List<ModelStat> models;
+  final List<ModelKeyStat> modelKeys;
+  final List<UsageRecord> topExpensive;
+  final Totals previousTotals;
+  final String? previousRange;
   final QuotaResult? quota;
   final SyncState sync;
   final String accountName;
@@ -568,6 +615,10 @@ class DashboardData {
     trend30: trend30,
     todayTrend: todayTrend,
     models: models,
+    modelKeys: modelKeys,
+    topExpensive: topExpensive,
+    previousTotals: previousTotals,
+    previousRange: previousRange,
     quota: quota ?? this.quota,
     sync: sync,
     accountName: accountName,

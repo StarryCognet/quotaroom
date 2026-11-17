@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,68 +8,106 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
+import '../widgets/charts.dart';
 import '../widgets/common.dart';
 
-class RecordsPage extends StatelessWidget {
+class KeyFilterSelection {
+  const KeyFilterSelection({required this.keyId, required this.keyName});
+
+  final String keyId;
+  final String keyName;
+}
+
+class RecordsPage extends StatefulWidget {
   const RecordsPage({super.key});
+
+  @override
+  State<RecordsPage> createState() => _RecordsPageState();
+}
+
+class _RecordsPageState extends State<RecordsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  final ValueNotifier<KeyFilterSelection?> _keyFilter = ValueNotifier(null);
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _keyFilter.dispose();
+    super.dispose();
+  }
+
+  void _selectKey(String keyId, String keyName) {
+    _keyFilter.value = KeyFilterSelection(keyId: keyId, keyName: keyName);
+    _tabs.animateTo(1);
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final colors = context.colors;
-    return DefaultTabController(
-      length: 3,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: colors.muted,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: TabBar(
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  color: colors.card,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x12000000),
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-                labelColor: colors.primary,
-                unselectedLabelColor: colors.text3,
-                labelStyle: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-                unselectedLabelStyle: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
-                ),
-                tabs: [
-                  Tab(height: 36, text: l10n.t('sessionUsage')),
-                  Tab(height: 36, text: l10n.t('usageRecords')),
-                  Tab(height: 36, text: l10n.t('keyUsage')),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: colors.muted,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TabBar(
+              controller: _tabs,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: colors.card,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
                 ],
               ),
+              labelColor: colors.primary,
+              unselectedLabelColor: colors.text3,
+              labelStyle: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              tabs: [
+                Tab(height: 36, text: l10n.t('sessionUsage')),
+                Tab(height: 36, text: l10n.t('usageRecords')),
+                Tab(height: 36, text: l10n.t('keyUsage')),
+              ],
             ),
           ),
-          const Expanded(
-            child: TabBarView(
-              children: [_SessionsTab(), _RecordsTab(), _KeyTab()],
-            ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              const _SessionsTab(),
+              _RecordsTab(keyFilter: _keyFilter),
+              _KeyTab(onSelectKey: _selectKey),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -325,8 +365,7 @@ class _SessionsTabState extends State<_SessionsTab> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               itemCount: _items.length + 1,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: 7),
+              separatorBuilder: (context, index) => const SizedBox(height: 7),
               itemBuilder: (context, index) {
                 if (index == _items.length) {
                   return _InfiniteFooter(
@@ -426,10 +465,7 @@ class _SessionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                last,
-                style: TextStyle(fontSize: 10, color: colors.text3),
-              ),
+              Text(last, style: TextStyle(fontSize: 10, color: colors.text3)),
             ],
           ),
           const SizedBox(height: 7),
@@ -475,7 +511,9 @@ class _SessionCard extends StatelessWidget {
 }
 
 class _RecordsTab extends StatefulWidget {
-  const _RecordsTab();
+  const _RecordsTab({required this.keyFilter});
+
+  final ValueNotifier<KeyFilterSelection?> keyFilter;
 
   @override
   State<_RecordsTab> createState() => _RecordsTabState();
@@ -485,6 +523,8 @@ class _RecordsTabState extends State<_RecordsTab> {
   static const int _pageSize = 15;
 
   final ScrollController _scroll = ScrollController();
+  final TextEditingController _search = TextEditingController();
+  Timer? _searchDebounce;
   int? _accountId;
   DateTime? _lastSyncAt;
   int _page = 0;
@@ -496,18 +536,38 @@ class _RecordsTabState extends State<_RecordsTab> {
   bool _loading = false;
   bool _loadingMore = false;
   String? _error;
+  String _query = '';
+  int? _days;
+  KeyFilterSelection? _selectedKey;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _selectedKey = widget.keyFilter.value;
+    widget.keyFilter.addListener(_onKeyFilterChanged);
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
+    _search.dispose();
+    widget.keyFilter.removeListener(_onKeyFilterChanged);
     super.dispose();
+  }
+
+  void _onKeyFilterChanged() {
+    final value = widget.keyFilter.value;
+    if (value == _selectedKey) return;
+    setState(() {
+      _selectedKey = value;
+      _page = 0;
+      _total = 0;
+      _items.clear();
+    });
+    _reload();
   }
 
   @override
@@ -519,6 +579,9 @@ class _RecordsTabState extends State<_RecordsTab> {
     final accountChanged = id != _accountId;
     final syncChanged = syncAt != null && syncAt != _lastSyncAt;
     if (accountChanged) {
+      // The first build may already carry a key drill-down selected from the
+      // Key tab. Only a real account switch should clear it.
+      final firstBuild = _accountId == null;
       _accountId = id;
       _lastSyncAt = syncAt;
       _page = 0;
@@ -526,6 +589,13 @@ class _RecordsTabState extends State<_RecordsTab> {
       _model = '';
       _models = const [];
       _items.clear();
+      _query = '';
+      _days = null;
+      if (!firstBuild) {
+        _selectedKey = null;
+        if (widget.keyFilter.value != null) widget.keyFilter.value = null;
+      }
+      _search.clear();
       _loading = true;
       _error = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -592,6 +662,9 @@ class _RecordsTabState extends State<_RecordsTab> {
         page: page,
         pageSize: _pageSize,
         model: _model.isEmpty ? null : _model,
+        days: _days,
+        keyId: _selectedKey?.keyId,
+        query: _query.isEmpty ? null : _query,
       );
       if (!mounted || requestId != _requestId) return;
       if (state.activeAccount?.id != account.id) return;
@@ -621,6 +694,51 @@ class _RecordsTabState extends State<_RecordsTab> {
     await context.read<AppState>().syncNow();
     if (!mounted) return;
     await _reload();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      final next = value.trim();
+      if (next == _query) return;
+      setState(() {
+        _query = next;
+        _page = 0;
+        _total = 0;
+        _items.clear();
+      });
+      _reload();
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    if (_query.isEmpty) return;
+    setState(() {
+      _query = '';
+      _page = 0;
+      _total = 0;
+      _items.clear();
+    });
+    _reload();
+  }
+
+  void _setDays(String value) {
+    final days = value == 'all' ? null : int.tryParse(value);
+    if (days == _days) return;
+    setState(() {
+      _days = days;
+      _page = 0;
+      _total = 0;
+      _items.clear();
+    });
+    _reload();
+  }
+
+  void _clearKeyFilter() {
+    widget.keyFilter.value = null;
   }
 
   Future<void> _pickModel() async {
@@ -656,10 +774,7 @@ class _RecordsTabState extends State<_RecordsTab> {
                     leading: ModelIcon(model: model, size: 20),
                     title: Text(
                       model,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colors.onSurface,
-                      ),
+                      style: TextStyle(fontSize: 13, color: colors.onSurface),
                     ),
                     trailing: _model == model
                         ? Icon(Icons.check_rounded, color: colors.primary)
@@ -697,49 +812,113 @@ class _RecordsTabState extends State<_RecordsTab> {
         onRetry: _reload,
       );
     }
-    final filterRow = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              l10n.t('recordsTotal', {'n': fmtInt(_total)}),
-              style: TextStyle(fontSize: 11, color: colors.text3),
+    final header = Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+          child: TextField(
+            controller: _search,
+            onChanged: _onSearchChanged,
+            style: const TextStyle(fontSize: 12.5),
+            decoration: InputDecoration(
+              hintText: l10n.t('searchHint'),
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                      onPressed: _clearSearch,
+                    ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 10,
+              ),
             ),
           ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 190),
-            child: OutlinedButton.icon(
-              onPressed: _pickModel,
-              icon: const Icon(Icons.filter_list_rounded, size: 15),
-              label: Text(
-                _model.isEmpty ? l10n.t('allModels') : _model,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 7,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.t('recordsTotal', {'n': fmtInt(_total)}),
+                  style: TextStyle(fontSize: 11, color: colors.text3),
                 ),
-                textStyle: const TextStyle(fontSize: 11.5),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: OutlinedButton.icon(
+                  onPressed: _pickModel,
+                  icon: const Icon(Icons.filter_list_rounded, size: 15),
+                  label: Text(
+                    _model.isEmpty ? l10n.t('allModels') : _model,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 7,
+                    ),
+                    textStyle: const TextStyle(fontSize: 11.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PillSelector<String>(
+              compact: true,
+              value: _days == null ? 'all' : _days.toString(),
+              onChanged: _setDays,
+              options: [
+                PillOption(value: '7', label: l10n.t('d7')),
+                PillOption(value: '30', label: l10n.t('d30')),
+                PillOption(value: 'all', label: l10n.t('all')),
+              ],
+            ),
+          ),
+        ),
+        if (_selectedKey != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                visualDensity: VisualDensity.compact,
+                label: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 230),
+                  child: Text(
+                    _selectedKey!.keyName.isEmpty
+                        ? l10n.t('unassigned')
+                        : _selectedKey!.keyName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                onDeleted: _clearKeyFilter,
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
     if (_items.isEmpty) {
       return Column(
         children: [
-          filterRow,
+          header,
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 30),
                   EmptyState(
                     icon: Icons.receipt_long_outlined,
                     title: l10n.t('emptyRecords'),
@@ -754,7 +933,7 @@ class _RecordsTabState extends State<_RecordsTab> {
     }
     return Column(
       children: [
-        filterRow,
+        header,
         Expanded(
           child: RefreshIndicator(
             onRefresh: _refresh,
@@ -763,8 +942,7 @@ class _RecordsTabState extends State<_RecordsTab> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               itemCount: _items.length + 1,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: 7),
+              separatorBuilder: (context, index) => const SizedBox(height: 7),
               itemBuilder: (context, index) {
                 if (index == _items.length) {
                   return _InfiniteFooter(
@@ -923,7 +1101,9 @@ class _RecordCard extends StatelessWidget {
 }
 
 class _KeyTab extends StatefulWidget {
-  const _KeyTab();
+  const _KeyTab({required this.onSelectKey});
+
+  final void Function(String keyId, String keyName) onSelectKey;
 
   @override
   State<_KeyTab> createState() => _KeyTabState();
@@ -933,6 +1113,7 @@ class _KeyTabState extends State<_KeyTab> {
   int? _accountId;
   DateTime? _lastSyncAt;
   List<KeyStat> _stats = const [];
+  Map<String, List<double>> _trends = const {};
   int _requestId = 0;
   bool _loading = false;
   String? _error;
@@ -949,6 +1130,7 @@ class _KeyTabState extends State<_KeyTab> {
       _accountId = id;
       _lastSyncAt = syncAt;
       _stats = const [];
+      _trends = const {};
       _loading = true;
       _error = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -973,10 +1155,17 @@ class _KeyTabState extends State<_KeyTab> {
     });
     try {
       final stats = await state.usageRepo.keyStats(account.id);
+      Map<String, List<double>> trends = const {};
+      try {
+        trends = await state.usageRepo.keyDailyTokens(account.id);
+      } catch (_) {
+        // Sparkline is optional; key totals still render.
+      }
       if (!mounted || requestId != _requestId) return;
       if (state.activeAccount?.id != account.id) return;
       setState(() {
         _stats = stats;
+        _trends = trends;
         _loading = false;
       });
     } catch (e) {
@@ -1056,7 +1245,9 @@ class _KeyTabState extends State<_KeyTab> {
               stat: _stats[i],
               index: i,
               totalTokens: totalTokens,
+              trend: _trends[_stats[i].keyId] ?? const [],
               state: state,
+              onSelectKey: widget.onSelectKey,
             ),
           ],
         ],
@@ -1070,13 +1261,17 @@ class _KeyCard extends StatelessWidget {
     required this.stat,
     required this.index,
     required this.totalTokens,
+    required this.trend,
     required this.state,
+    required this.onSelectKey,
   });
 
   final KeyStat stat;
   final int index;
   final int totalTokens;
+  final List<double> trend;
   final AppState state;
+  final void Function(String keyId, String keyName) onSelectKey;
 
   static const List<Color> _palette = [
     Color(0xFF7C5CF6),
@@ -1096,9 +1291,7 @@ class _KeyCard extends StatelessWidget {
     final keyName = stat.keyId.isEmpty
         ? l10n.t('unassigned')
         : (rawName.isNotEmpty ? rawName : truncateMiddle(stat.keyId, 24));
-    final displayId = stat.keyId.isEmpty
-        ? ''
-        : truncateMiddle(stat.keyId, 34);
+    final displayId = stat.keyId.isEmpty ? '' : truncateMiddle(stat.keyId, 34);
     final showId = displayId.isNotEmpty && displayId != keyName;
     final share = totalTokens > 0 ? stat.totalTokens / totalTokens : 0.0;
     final last = fmtRelative(
@@ -1110,122 +1303,139 @@ class _KeyCard extends StatelessWidget {
       dayAgo: l10n.t('dayAgo'),
     );
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => onSelectKey(stat.keyId, keyName),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      keyName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: colors.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    fmtMoney(
+                      stat.totalCostUsd,
+                      currency: state.currency,
+                      rate: state.usdCny,
+                    ),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: colors.amber,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: colors.text3,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  keyName,
+              if (showId) ...[
+                const SizedBox(height: 2),
+                Text(
+                  displayId,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: colors.text,
+                  style: TextStyle(fontSize: 9.5, color: colors.text3),
+                ),
+              ],
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: share.clamp(0.0, 1.0),
+                  minHeight: 4,
+                  backgroundColor: colors.muted,
+                  valueColor: AlwaysStoppedAnimation(color),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    '${(share * 100).toStringAsFixed(1)}%',
+                    style: TextStyle(fontSize: 10, color: colors.text3),
                   ),
-                ),
+                  const Spacer(),
+                  Text(
+                    '${l10n.t('colLastUsed')} $last',
+                    style: TextStyle(fontSize: 10, color: colors.text3),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                fmtMoney(
-                  stat.totalCostUsd,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                ),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: colors.amber,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-          if (showId) ...[
-            const SizedBox(height: 2),
-            Text(
-              displayId,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 9.5, color: colors.text3),
-            ),
-          ],
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: share.clamp(0.0, 1.0),
-              minHeight: 4,
-              backgroundColor: colors.muted,
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                '${(share * 100).toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 10, color: colors.text3),
-              ),
-              const Spacer(),
-              Text(
-                '${l10n.t('colLastUsed')} $last',
-                style: TextStyle(fontSize: 10, color: colors.text3),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 5,
-            runSpacing: 5,
-            children: [
-              StatChip(
-                label: l10n.t('requests'),
-                value: fmtInt(stat.requestCount),
-              ),
-              StatChip(
-                label: l10n.t('totalTokensShort'),
-                value: fmtTokens(stat.totalTokens),
-              ),
-              StatChip(
-                label: l10n.t('input'),
-                value: fmtTokens(stat.totalInputTokens),
-              ),
-              StatChip(
-                label: l10n.t('output'),
-                value: fmtTokens(stat.totalOutputTokens),
-              ),
-              StatChip(
-                label: l10n.t('colReasoning'),
-                value: fmtTokens(stat.totalReasoningTokens),
-              ),
-              StatChip(
-                label: l10n.t('cacheReadTokens'),
-                value: fmtTokens(stat.cacheHitTokens),
-              ),
-              StatChip(
-                label: l10n.t('cacheWriteTokens'),
-                value: fmtTokens(stat.cacheWriteTokens),
-              ),
-              StatChip(
-                label: l10n.t('sessions'),
-                value: fmtInt(stat.sessionCount),
+              if (trend.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Sparkline(values: trend, color: color, height: 24),
+              ],
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: [
+                  StatChip(
+                    label: l10n.t('requests'),
+                    value: fmtInt(stat.requestCount),
+                  ),
+                  StatChip(
+                    label: l10n.t('totalTokensShort'),
+                    value: fmtTokens(stat.totalTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('input'),
+                    value: fmtTokens(stat.totalInputTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('output'),
+                    value: fmtTokens(stat.totalOutputTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('colReasoning'),
+                    value: fmtTokens(stat.totalReasoningTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('cacheReadTokens'),
+                    value: fmtTokens(stat.cacheHitTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('cacheWriteTokens'),
+                    value: fmtTokens(stat.cacheWriteTokens),
+                  ),
+                  StatChip(
+                    label: l10n.t('sessions'),
+                    value: fmtInt(stat.sessionCount),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

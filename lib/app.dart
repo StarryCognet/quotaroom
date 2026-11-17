@@ -19,7 +19,10 @@ class QuotaRoomApp extends StatelessWidget {
       title: 'QuotaRoom',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(Brightness.light),
-      darkTheme: buildAppTheme(Brightness.dark),
+      darkTheme: buildAppTheme(
+        Brightness.dark,
+        amoled: state.settings.amoled,
+      ),
       themeMode: state.themeModeValue,
       locale: Locale(state.language == 'en' ? 'en' : 'zh'),
       supportedLocales: const [Locale('zh'), Locale('en')],
@@ -31,7 +34,8 @@ class QuotaRoomApp extends StatelessWidget {
       home: const AppRoot(),
       builder: (context, child) {
         final dark = Theme.of(context).brightness == Brightness.dark;
-        final colors = dark ? AppColors.dark : AppColors.light;
+        final colors = Theme.of(context).extension<AppColors>() ??
+            (dark ? AppColors.dark : AppColors.light);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,

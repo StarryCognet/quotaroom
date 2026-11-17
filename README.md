@@ -31,13 +31,14 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v1.2.0 直链：[QuotaRoom-v1.2.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.2.0/QuotaRoom-v1.2.0.apk)
-- SHA-256：`84a97d56ea99d0e5e7c1decbc975b5c5c5f0e75b3581e3679fbfdf443e94ccff`
+- v2.0.0 直链：[QuotaRoom-v2.0.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.0.0/QuotaRoom-v2.0.0.apk)
+- SHA-256：见 Release 附件 `SHA256SUMS.txt`
 
 > 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
+- **v2.0.0**：额度节奏 / 预计耗尽、每日预算、额度与预算本地提醒；统计页新增周期对比、模型 × Key、最贵请求 Top 5；记录页支持搜索与时间 / 模型 / Key 筛选，Key 卡片可下钻并显示 7 日 sparkline；新增 Android 桌面小组件、WorkManager 后台同步、长按快捷方式、检查更新、CSV 导出、数据库备份 / 恢复、用量摘要分享、同步日志与 AMOLED 纯黑主题。
 - **v1.2.0**：记录页新增「Key 用量」Tab，按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间；会话与记录列表移除分页器，滚动到底自动加载更多；新增 keyStats 聚合查询与测试；版本 1.2.0。
 - **v1.1.0**：UI/UX 重构——首页配额合并为紧凑三行、KPI 减到 4 个、趋势图上移；配额改为「已用% + 剩余% + 绝对重置时间」并加入健康度配色；本地数据优先渲染、配额异步刷新；首页/统计/记录/账号下拉刷新统一；记录页固定分页器 + 紧凑卡片与短时间格式；统计页改为 KPI → 趋势 → 模型 → Token 构成；账号页账户卡前置；暗色对比度、图表字号、同步状态点、首次同步提示；补充异常隔离。
 - **v1.0.1**：修复登录后自动同步定时器未启动、记录/会话页同步后不刷新、退出当前账号后出现空账号面板、模型环形图超过 5 个模型时总数漏算；新增「项目主页 / 问题反馈」入口；版本号 1.0.1。
@@ -67,10 +68,15 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 - 30 天用量趋势（Token / 请求 / 费用双轴）
 - 会话用量聚合（按 sessionID 分组，无 session 时按 key 拆分）
 - Key 用量：按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间
-- 请求级使用记录，滑到底自动加载 + 模型筛选
+- 请求级使用记录，滑到底自动加载 + 搜索 + 时间 / 模型 / Key 筛选
+- Key 用量下钻：点按 Key 直接查看该 Key 的记录与 7 日趋势
+- 额度节奏与预计耗尽时间、每日预算、额度 / 预算本地通知
+- 周期对比、模型 × Key 组合排行、最贵请求 Top 5
+- Android 桌面小组件、WorkManager 后台同步、长按快捷方式
+- 同步日志、检查更新、CSV 导出、SQLite 备份 / 恢复、用量摘要分享
 - 多账号：添加 / 切换 / 重命名 / 重新登录 / 退出 / 删除
 - 自动增量同步（1/5/15/30 分钟），同步范围（30/60/90/180 天 / 全部）
-- 浅色 / 深色 / 跟随系统，中文 / English，CNY / USD
+- 浅色 / 深色 / 跟随系统 / AMOLED 纯黑，中文 / English，CNY / USD
 - 内置 WebView 登录 + 手动粘贴 Cookie 兜底
 - 数据本地优先；会话 Cookie 存放在 Android Keystore 加密存储中
 - 关于页内置开源许可查看器，展示上游 MIT 文本
@@ -80,7 +86,7 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v1.2.0.apk
+adb install -r QuotaRoom-v2.0.0.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。

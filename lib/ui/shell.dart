@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:quick_actions/quick_actions.dart';
 
 import '../core/formatters.dart';
 import '../core/theme.dart';
@@ -20,6 +23,8 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  bool _quickActionsReady = false;
+  String? _shortcutLanguage;
 
   static const List<Widget> _pages = [
     HomePage(),
@@ -28,6 +33,77 @@ class _AppShellState extends State<AppShell> {
     AccountsPage(),
     SettingsPage(),
   ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = context.read<AppState>();
+    if (_shortcutLanguage != state.language) {
+      _shortcutLanguage = state.language;
+      unawaited(_setupQuickActions(state));
+    }
+  }
+
+  Future<void> _setupQuickActions(AppState state) async {
+    const quickActions = QuickActions();
+    try {
+      if (!_quickActionsReady) {
+        await quickActions.initialize(_handleQuickAction);
+        _quickActionsReady = true;
+      }
+      final zh = state.language != 'en';
+      await quickActions.setShortcutItems([
+        ShortcutItem(
+          type: 'sync',
+          localizedTitle: zh ? '立即同步' : 'Sync now',
+          localizedSubtitle: zh ? '刷新额度与用量' : 'Refresh quota and usage',
+        ),
+        ShortcutItem(
+          type: 'stats',
+          localizedTitle: zh ? '查看统计' : 'Statistics',
+          localizedSubtitle: zh ? '用量趋势与费用' : 'Usage trends and cost',
+        ),
+        ShortcutItem(
+          type: 'records',
+          localizedTitle: zh ? '使用记录' : 'Usage records',
+          localizedSubtitle: zh ? '按 Key 查看明细' : 'Details by API key',
+        ),
+      ]);
+    } catch (e) {
+      debugPrint('QuotaRoom quick actions failed: $e');
+    }
+  }
+
+  void _handleQuickAction(String type) {
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    switch (type) {
+      case 'sync':
+        setState(() => _index = 0);
+        unawaited(_quickSync(state));
+        break;
+      case 'stats':
+        setState(() => _index = 1);
+        break;
+      case 'records':
+        setState(() => _index = 2);
+        break;
+    }
+  }
+
+  Future<void> _quickSync(AppState state) async {
+    final result = await state.syncNow();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.ok
+              ? state.l10n.t('syncDone')
+              : '${state.l10n.t('syncFailed')}: ${result.error ?? ''}',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,10 +178,7 @@ class _AppShellState extends State<AppShell> {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colors.text3,
-                            ),
+                            style: TextStyle(fontSize: 11, color: colors.text3),
                           ),
                         ),
                       ],
@@ -190,8 +263,6 @@ class _AppShellState extends State<AppShell> {
     final text = result.ok
         ? '${l10n.t('syncDone')} · +${result.inserted}'
         : '${l10n.t('syncFailed')}: ${result.error ?? ''}';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }

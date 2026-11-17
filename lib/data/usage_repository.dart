@@ -92,15 +92,26 @@ class UsageRepository {
     );
   }
 
-  Future<Totals> totals(int accountId, String period) async {
-    final fromMs = fromMsForPeriod(period);
-    final where = StringBuffer('account_id = ?');
+  Future<Totals> totals(int accountId, String period) {
+    return totalsBetween(accountId, fromMs: fromMsForPeriod(period));
+  }
+
+  Future<Totals> totalsBetween(
+    int accountId, {
+    int? fromMs,
+    int? toMs,
+  }) async {
+    final where = <String>['account_id = ?'];
     final args = <Object?>[accountId];
     if (fromMs != null) {
-      where.write(' AND created_ms >= ?');
+      where.add('created_ms >= ?');
       args.add(fromMs);
     }
-    final rows = await db.rawQuery('''
+    if (toMs != null) {
+      where.add('created_ms < ?');
+      args.add(toMs);
+    }
+    final rows = await db.rawQuery("""
       SELECT COUNT(*) AS request_count,
              COUNT(DISTINCT CASE WHEN session_id IS NOT NULL AND session_id != ''
                                  THEN session_id END) AS session_count,
@@ -113,9 +124,66 @@ class UsageRepository {
              SUM(output_tokens) AS total_output_tokens,
              SUM(cost_usd) AS total_cost_usd
       FROM usage_records
-      WHERE $where
-    ''', args);
+      WHERE ${where.join(' AND ')}
+    """, args);
     return _totalsFromRow(rows.isEmpty ? const {} : rows.first);
+  }
+
+  Future<List<ModelKeyStat>> modelKeyStats(
+    int accountId,
+    String period, {
+    int limit = 5,
+  }) async {
+    final fromMs = fromMsForPeriod(period);
+    final where = <String>['account_id = ?'];
+    final args = <Object?>[accountId];
+    if (fromMs != null) {
+      where.add('created_ms >= ?');
+      args.add(fromMs);
+    }
+    final rows = await db.rawQuery("""
+      SELECT model,
+             key_id,
+             COUNT(*) AS request_count,
+             SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
+                 + cache_write_1h_tokens + output_tokens + reasoning_tokens) AS total_tokens,
+             SUM(cost_usd) AS total_cost_usd
+      FROM usage_records
+      WHERE ${where.join(' AND ')}
+      GROUP BY model, key_id
+      ORDER BY total_tokens DESC
+      LIMIT ?
+    """, [...args, limit.clamp(1, 20).toInt()]);
+    return rows.map((row) {
+      return ModelKeyStat(
+        model: (row['model'] ?? '').toString(),
+        keyId: (row['key_id'] ?? '').toString(),
+        requestCount: _int(row['request_count']),
+        totalTokens: _int(row['total_tokens']),
+        totalCostUsd: _double(row['total_cost_usd']),
+      );
+    }).toList();
+  }
+
+  Future<List<UsageRecord>> topExpensive(
+    int accountId,
+    String period, {
+    int limit = 5,
+  }) async {
+    final fromMs = fromMsForPeriod(period);
+    final where = <String>['account_id = ?'];
+    final args = <Object?>[accountId];
+    if (fromMs != null) {
+      where.add('created_ms >= ?');
+      args.add(fromMs);
+    }
+    final rows = await db.rawQuery("""
+      SELECT * FROM usage_records
+      WHERE ${where.join(' AND ')}
+      ORDER BY cost_usd DESC, created_ms DESC
+      LIMIT ?
+    """, [...args, limit.clamp(1, 20).toInt()]);
+    return rows.map(UsageRecord.fromDbMap).toList();
   }
 
   Future<List<ModelStat>> modelStats(int accountId, String period) async {
@@ -236,6 +304,8 @@ class UsageRepository {
     int pageSize = 20,
     String? model,
     int? days,
+    String? keyId,
+    String? query,
   }) async {
     final currentPage = page < 1 ? 1 : page;
     final size = pageSize.clamp(1, 100).toInt();
@@ -252,6 +322,20 @@ class UsageRepository {
             .subtract(Duration(days: days))
             .millisecondsSinceEpoch,
       );
+    }
+    if (keyId != null) {
+      if (keyId.isEmpty) {
+        where.add("(key_id IS NULL OR key_id = '')");
+      } else {
+        where.add('key_id = ?');
+        args.add(keyId);
+      }
+    }
+    final search = (query ?? '').trim();
+    if (search.isNotEmpty) {
+      final like = '%$search%';
+      where.add('(session_id LIKE ? OR key_id LIKE ? OR model LIKE ?)');
+      args.addAll([like, like, like]);
     }
     final whereSql = where.join(' AND ');
     final total = Sqflite.firstIntValue(
@@ -273,6 +357,16 @@ class UsageRepository {
       records: rows.map(UsageRecord.fromDbMap).toList(),
       total: total,
     );
+  }
+
+  Future<List<UsageRecord>> allRecords(int accountId) async {
+    final rows = await db.query(
+      'usage_records',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+      orderBy: 'created_ms DESC',
+    );
+    return rows.map(UsageRecord.fromDbMap).toList();
   }
 
   Future<SessionsPageResult> sessionsPage(
@@ -385,6 +479,44 @@ class UsageRepository {
             : DateTime.fromMillisecondsSinceEpoch(lastMs, isUtc: true),
       );
     }).toList();
+  }
+
+  Future<Map<String, List<double>>> keyDailyTokens(
+    int accountId, {
+    int days = 7,
+  }) async {
+    final span = days.clamp(1, 30).toInt();
+    final rows = await db.rawQuery('''
+      SELECT key_id,
+             date(created_ms / 1000, 'unixepoch', 'localtime') AS day,
+             SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
+                 + cache_write_1h_tokens + output_tokens + reasoning_tokens) AS tokens
+      FROM usage_records
+      WHERE account_id = ?
+        AND date(created_ms / 1000, 'unixepoch', 'localtime')
+            >= date('now', 'localtime', ?)
+      GROUP BY key_id, day
+    ''', [accountId, '-${span - 1} days']);
+    final byKey = <String, Map<String, double>>{};
+    for (final row in rows) {
+      final key = (row['key_id'] ?? '').toString();
+      final day = (row['day'] ?? '').toString();
+      byKey.putIfAbsent(key, () => {})[day] = _double(row['tokens']);
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    String dayKey(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+    final result = <String, List<double>>{};
+    for (final entry in byKey.entries) {
+      result[entry.key] = [
+        for (var i = span - 1; i >= 0; i--)
+          entry.value[dayKey(today.subtract(Duration(days: i)))] ?? 0,
+      ];
+    }
+    return result;
   }
 
   Future<List<String>> models(int accountId) async {
