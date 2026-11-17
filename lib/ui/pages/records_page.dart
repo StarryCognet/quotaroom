@@ -7,7 +7,6 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
 import '../widgets/common.dart';
-import '../widgets/pager.dart';
 
 class RecordsPage extends StatelessWidget {
   const RecordsPage({super.key});
@@ -18,7 +17,7 @@ class RecordsPage extends StatelessWidget {
     final l10n = state.l10n;
     final colors = context.colors;
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -47,23 +46,24 @@ class RecordsPage extends StatelessWidget {
                 labelColor: colors.primary,
                 unselectedLabelColor: colors.text3,
                 labelStyle: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                 ),
                 unselectedLabelStyle: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w500,
                 ),
                 tabs: [
                   Tab(height: 36, text: l10n.t('sessionUsage')),
                   Tab(height: 36, text: l10n.t('usageRecords')),
+                  Tab(height: 36, text: l10n.t('keyUsage')),
                 ],
               ),
             ),
           ),
           const Expanded(
             child: TabBarView(
-              children: [_SessionsTab(), _RecordsTab()],
+              children: [_SessionsTab(), _RecordsTab(), _KeyTab()],
             ),
           ),
         ],
@@ -72,38 +72,66 @@ class RecordsPage extends StatelessWidget {
   }
 }
 
-class _PagerFooter extends StatelessWidget {
-  const _PagerFooter({
-    required this.page,
-    required this.totalPages,
-    required this.onPrev,
-    required this.onNext,
+class _InfiniteFooter extends StatelessWidget {
+  const _InfiniteFooter({
+    required this.loading,
+    required this.error,
+    required this.hasMore,
+    required this.onRetry,
     required this.l10n,
   });
 
-  final int page;
-  final int totalPages;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
+  final bool loading;
+  final String? error;
+  final bool hasMore;
+  final VoidCallback onRetry;
   final L10n l10n;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Pager(
-        page: page,
-        totalPages: totalPages,
-        onPrev: onPrev,
-        onNext: onNext,
-        l10n: l10n,
-      ),
-    );
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Center(
+          child: TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: Text(
+              l10n.t('retry'),
+              style: const TextStyle(fontSize: 11.5),
+            ),
+          ),
+        ),
+      );
+    }
+    if (!hasMore) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: Text(
+            l10n.t('allLoaded'),
+            style: TextStyle(fontSize: 10.5, color: colors.text3),
+          ),
+        ),
+      );
+    }
+    return const SizedBox(height: 28);
   }
 }
 
@@ -117,12 +145,29 @@ class _SessionsTab extends StatefulWidget {
 class _SessionsTabState extends State<_SessionsTab> {
   static const int _pageSize = 10;
 
+  final ScrollController _scroll = ScrollController();
   int? _accountId;
   DateTime? _lastSyncAt;
-  int _page = 1;
-  SessionsPageResult? _data;
+  int _page = 0;
+  int _total = 0;
+  final List<SessionStat> _items = [];
+  int _requestId = 0;
   bool _loading = false;
+  bool _loadingMore = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -135,43 +180,90 @@ class _SessionsTabState extends State<_SessionsTab> {
     if (accountChanged) {
       _accountId = id;
       _lastSyncAt = syncAt;
-      _page = 1;
-      _data = null;
+      _page = 0;
+      _total = 0;
+      _items.clear();
+      _loading = true;
+      _error = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _load();
+        if (mounted) _reload();
       });
     } else if (syncChanged) {
       _lastSyncAt = syncAt;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _load();
-      });
+      final atTop = !_scroll.hasClients || _scroll.offset <= 120;
+      if (_items.isEmpty || atTop) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _reload();
+        });
+      }
     }
   }
 
-  Future<void> _load() async {
+  void _onScroll() {
+    if (!_scroll.hasClients || _loading || _loadingMore || _error != null) {
+      return;
+    }
+    final position = _scroll.position;
+    if (position.pixels >= position.maxScrollExtent - 260) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _reload() async {
+    if (!mounted) return;
+    await _fetchPage(1, reset: true);
+  }
+
+  void _loadMore() {
+    if (_loading || _loadingMore || _error != null) return;
+    if (_total > 0 && _items.length >= _total) return;
+    _fetchPage(_page + 1, reset: false);
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+    _loadMore();
+  }
+
+  Future<void> _fetchPage(int page, {required bool reset}) async {
     final state = context.read<AppState>();
     final account = state.activeAccount;
     if (account == null) return;
+    final requestId = ++_requestId;
     setState(() {
-      _loading = true;
+      if (reset) {
+        _loading = true;
+        _loadingMore = false;
+      } else {
+        _loadingMore = true;
+      }
       _error = null;
     });
     try {
       final data = await state.usageRepo.sessionsPage(
         account.id,
-        page: _page,
+        page: page,
         pageSize: _pageSize,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
+      if (state.activeAccount?.id != account.id) return;
       setState(() {
-        _data = data;
+        if (reset) {
+          _items.clear();
+          _page = 0;
+        }
+        _items.addAll(data.records);
+        _page = page;
+        _total = data.total;
         _loading = false;
+        _loadingMore = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() {
         _error = e.toString();
         _loading = false;
+        _loadingMore = false;
       });
     }
   }
@@ -179,13 +271,7 @@ class _SessionsTabState extends State<_SessionsTab> {
   Future<void> _refresh() async {
     await context.read<AppState>().syncNow();
     if (!mounted) return;
-    setState(() => _page = 1);
-    await _load();
-  }
-
-  void _goTo(int page) {
-    setState(() => _page = page);
-    _load();
+    await _reload();
   }
 
   @override
@@ -193,18 +279,17 @@ class _SessionsTabState extends State<_SessionsTab> {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final colors = context.colors;
-    if (_loading && _data == null) {
+    if (_loading && _items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
+    if (_error != null && _items.isEmpty) {
       return ErrorState(
         message: '${l10n.t('loadFailed')}: $_error',
         retryLabel: l10n.t('retry'),
-        onRetry: _load,
+        onRetry: _reload,
       );
     }
-    final data = _data;
-    if (data == null || data.records.isEmpty) {
+    if (_items.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
@@ -220,7 +305,6 @@ class _SessionsTabState extends State<_SessionsTab> {
         ),
       );
     }
-    final totalPages = (data.total / _pageSize).ceil().clamp(1, 1 << 30).toInt();
     return Column(
       children: [
         Padding(
@@ -228,7 +312,7 @@ class _SessionsTabState extends State<_SessionsTab> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              l10n.t('sessionsTotal', {'n': fmtInt(data.total)}),
+              l10n.t('sessionsTotal', {'n': fmtInt(_total)}),
               style: TextStyle(fontSize: 11, color: colors.text3),
             ),
           ),
@@ -237,13 +321,23 @@ class _SessionsTabState extends State<_SessionsTab> {
           child: RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.separated(
+              controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              itemCount: data.records.length,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              itemCount: _items.length + 1,
               separatorBuilder: (context, index) =>
                   const SizedBox(height: 7),
               itemBuilder: (context, index) {
-                final session = data.records[index];
+                if (index == _items.length) {
+                  return _InfiniteFooter(
+                    loading: _loadingMore,
+                    error: _error,
+                    hasMore: _items.length < _total,
+                    onRetry: _retry,
+                    l10n: l10n,
+                  );
+                }
+                final session = _items[index];
                 return _SessionCard(
                   session: session,
                   keyName: state.keyNames[session.keyId] ?? '',
@@ -252,13 +346,6 @@ class _SessionsTabState extends State<_SessionsTab> {
               },
             ),
           ),
-        ),
-        _PagerFooter(
-          page: _page,
-          totalPages: totalPages,
-          onPrev: () => _goTo(_page - 1),
-          onNext: () => _goTo(_page + 1),
-          l10n: l10n,
         ),
       ],
     );
@@ -397,14 +484,31 @@ class _RecordsTab extends StatefulWidget {
 class _RecordsTabState extends State<_RecordsTab> {
   static const int _pageSize = 15;
 
+  final ScrollController _scroll = ScrollController();
   int? _accountId;
   DateTime? _lastSyncAt;
-  int _page = 1;
+  int _page = 0;
+  int _total = 0;
   String _model = '';
   List<String> _models = const [];
-  RecordsPageResult? _data;
+  final List<UsageRecord> _items = [];
+  int _requestId = 0;
   bool _loading = false;
+  bool _loadingMore = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -417,48 +521,98 @@ class _RecordsTabState extends State<_RecordsTab> {
     if (accountChanged) {
       _accountId = id;
       _lastSyncAt = syncAt;
-      _page = 1;
+      _page = 0;
+      _total = 0;
       _model = '';
-      _data = null;
       _models = const [];
+      _items.clear();
+      _loading = true;
+      _error = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _load();
+        if (mounted) _reload();
       });
     } else if (syncChanged) {
       _lastSyncAt = syncAt;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _load();
-      });
+      final atTop = !_scroll.hasClients || _scroll.offset <= 120;
+      if (_items.isEmpty || atTop) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _reload();
+        });
+      }
     }
   }
 
-  Future<void> _load() async {
+  void _onScroll() {
+    if (!_scroll.hasClients || _loading || _loadingMore || _error != null) {
+      return;
+    }
+    final position = _scroll.position;
+    if (position.pixels >= position.maxScrollExtent - 260) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _reload() async {
+    if (!mounted) return;
+    await _fetchPage(1, reset: true);
+  }
+
+  void _loadMore() {
+    if (_loading || _loadingMore || _error != null) return;
+    if (_total > 0 && _items.length >= _total) return;
+    _fetchPage(_page + 1, reset: false);
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+    _loadMore();
+  }
+
+  Future<void> _fetchPage(int page, {required bool reset}) async {
     final state = context.read<AppState>();
     final account = state.activeAccount;
     if (account == null) return;
+    final requestId = ++_requestId;
     setState(() {
-      _loading = true;
+      if (reset) {
+        _loading = true;
+        _loadingMore = false;
+      } else {
+        _loadingMore = true;
+      }
       _error = null;
     });
     try {
-      final models = await state.usageRepo.models(account.id);
+      List<String>? freshModels;
+      if (reset) {
+        freshModels = await state.usageRepo.models(account.id);
+      }
       final data = await state.usageRepo.recordsPage(
         account.id,
-        page: _page,
+        page: page,
         pageSize: _pageSize,
         model: _model.isEmpty ? null : _model,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
+      if (state.activeAccount?.id != account.id) return;
       setState(() {
-        _models = models;
-        _data = data;
+        if (reset) {
+          _items.clear();
+          _page = 0;
+          if (freshModels != null) _models = freshModels;
+        }
+        _items.addAll(data.records);
+        _page = page;
+        _total = data.total;
         _loading = false;
+        _loadingMore = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() {
         _error = e.toString();
         _loading = false;
+        _loadingMore = false;
       });
     }
   }
@@ -466,13 +620,7 @@ class _RecordsTabState extends State<_RecordsTab> {
   Future<void> _refresh() async {
     await context.read<AppState>().syncNow();
     if (!mounted) return;
-    setState(() => _page = 1);
-    await _load();
-  }
-
-  void _goTo(int page) {
-    setState(() => _page = page);
-    _load();
+    await _reload();
   }
 
   Future<void> _pickModel() async {
@@ -527,9 +675,11 @@ class _RecordsTabState extends State<_RecordsTab> {
     if (selected == null || !mounted) return;
     setState(() {
       _model = selected;
-      _page = 1;
+      _page = 0;
+      _total = 0;
+      _items.clear();
     });
-    await _load();
+    await _reload();
   }
 
   @override
@@ -537,26 +687,23 @@ class _RecordsTabState extends State<_RecordsTab> {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final colors = context.colors;
-    if (_loading && _data == null) {
+    if (_loading && _items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
+    if (_error != null && _items.isEmpty) {
       return ErrorState(
         message: '${l10n.t('loadFailed')}: $_error',
         retryLabel: l10n.t('retry'),
-        onRetry: _load,
+        onRetry: _reload,
       );
     }
-    final data = _data;
     final filterRow = Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              data == null
-                  ? ''
-                  : l10n.t('recordsTotal', {'n': fmtInt(data.total)}),
+              l10n.t('recordsTotal', {'n': fmtInt(_total)}),
               style: TextStyle(fontSize: 11, color: colors.text3),
             ),
           ),
@@ -582,7 +729,7 @@ class _RecordsTabState extends State<_RecordsTab> {
         ],
       ),
     );
-    if (data == null || data.records.isEmpty) {
+    if (_items.isEmpty) {
       return Column(
         children: [
           filterRow,
@@ -605,7 +752,6 @@ class _RecordsTabState extends State<_RecordsTab> {
         ],
       );
     }
-    final totalPages = (data.total / _pageSize).ceil().clamp(1, 1 << 30).toInt();
     return Column(
       children: [
         filterRow,
@@ -613,13 +759,23 @@ class _RecordsTabState extends State<_RecordsTab> {
           child: RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.separated(
+              controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              itemCount: data.records.length,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              itemCount: _items.length + 1,
               separatorBuilder: (context, index) =>
                   const SizedBox(height: 7),
               itemBuilder: (context, index) {
-                final record = data.records[index];
+                if (index == _items.length) {
+                  return _InfiniteFooter(
+                    loading: _loadingMore,
+                    error: _error,
+                    hasMore: _items.length < _total,
+                    onRetry: _retry,
+                    l10n: l10n,
+                  );
+                }
+                final record = _items[index];
                 return _RecordCard(
                   record: record,
                   state: state,
@@ -628,13 +784,6 @@ class _RecordsTabState extends State<_RecordsTab> {
               },
             ),
           ),
-        ),
-        _PagerFooter(
-          page: _page,
-          totalPages: totalPages,
-          onPrev: () => _goTo(_page - 1),
-          onNext: () => _goTo(_page + 1),
-          l10n: l10n,
         ),
       ],
     );
@@ -764,6 +913,315 @@ class _RecordCard extends StatelessWidget {
               StatChip(
                 label: l10n.t('cacheWriteTokens'),
                 value: fmtTokens(record.cacheWriteTokens),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KeyTab extends StatefulWidget {
+  const _KeyTab();
+
+  @override
+  State<_KeyTab> createState() => _KeyTabState();
+}
+
+class _KeyTabState extends State<_KeyTab> {
+  int? _accountId;
+  DateTime? _lastSyncAt;
+  List<KeyStat> _stats = const [];
+  int _requestId = 0;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = context.watch<AppState>();
+    final id = state.activeAccount?.id;
+    final syncAt = state.dashboard?.sync.lastSyncAt;
+    final accountChanged = id != _accountId;
+    final syncChanged = syncAt != null && syncAt != _lastSyncAt;
+    if (accountChanged) {
+      _accountId = id;
+      _lastSyncAt = syncAt;
+      _stats = const [];
+      _loading = true;
+      _error = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    } else if (syncChanged) {
+      _lastSyncAt = syncAt;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
+  }
+
+  Future<void> _load() async {
+    final state = context.read<AppState>();
+    final account = state.activeAccount;
+    if (account == null) return;
+    final requestId = ++_requestId;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final stats = await state.usageRepo.keyStats(account.id);
+      if (!mounted || requestId != _requestId) return;
+      if (state.activeAccount?.id != account.id) return;
+      setState(() {
+        _stats = stats;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    await context.read<AppState>().syncNow();
+    if (!mounted) return;
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final l10n = state.l10n;
+    final colors = context.colors;
+    if (_loading && _stats.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return ErrorState(
+        message: '${l10n.t('loadFailed')}: $_error',
+        retryLabel: l10n.t('retry'),
+        onRetry: _load,
+      );
+    }
+    if (_stats.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 50),
+            EmptyState(
+              icon: Icons.key_outlined,
+              title: l10n.t('noData'),
+              subtitle: l10n.t('syncHint'),
+            ),
+          ],
+        ),
+      );
+    }
+    final totalTokens = _stats.fold<int>(
+      0,
+      (sum, stat) => sum + stat.totalTokens,
+    );
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.t('keysTotal', {'n': _stats.length}),
+                  style: TextStyle(fontSize: 11, color: colors.text3),
+                ),
+              ),
+              Text(
+                l10n.t('keyUsageDesc'),
+                style: TextStyle(fontSize: 10, color: colors.text3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (var i = 0; i < _stats.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _KeyCard(
+              stat: _stats[i],
+              index: i,
+              totalTokens: totalTokens,
+              state: state,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _KeyCard extends StatelessWidget {
+  const _KeyCard({
+    required this.stat,
+    required this.index,
+    required this.totalTokens,
+    required this.state,
+  });
+
+  final KeyStat stat;
+  final int index;
+  final int totalTokens;
+  final AppState state;
+
+  static const List<Color> _palette = [
+    Color(0xFF7C5CF6),
+    Color(0xFF4F8EF7),
+    Color(0xFF22C55E),
+    Color(0xFFD97706),
+    Color(0xFF06B6D4),
+    Color(0xFFEC4899),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final l10n = state.l10n;
+    final color = _palette[index % _palette.length];
+    final rawName = state.keyNames[stat.keyId] ?? '';
+    final keyName = stat.keyId.isEmpty
+        ? l10n.t('unassigned')
+        : (rawName.isNotEmpty ? rawName : truncateMiddle(stat.keyId, 24));
+    final displayId = stat.keyId.isEmpty
+        ? ''
+        : truncateMiddle(stat.keyId, 34);
+    final showId = displayId.isNotEmpty && displayId != keyName;
+    final share = totalTokens > 0 ? stat.totalTokens / totalTokens : 0.0;
+    final last = fmtRelative(
+      stat.lastAt,
+      never: l10n.t('never'),
+      justNow: l10n.t('justNow'),
+      minAgo: l10n.t('minAgo'),
+      hrAgo: l10n.t('hrAgo'),
+      dayAgo: l10n.t('dayAgo'),
+    );
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  keyName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                fmtMoney(
+                  stat.totalCostUsd,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                ),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colors.amber,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          if (showId) ...[
+            const SizedBox(height: 2),
+            Text(
+              displayId,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 9.5, color: colors.text3),
+            ),
+          ],
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: share.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: colors.muted,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                '${(share * 100).toStringAsFixed(1)}%',
+                style: TextStyle(fontSize: 10, color: colors.text3),
+              ),
+              const Spacer(),
+              Text(
+                '${l10n.t('colLastUsed')} $last',
+                style: TextStyle(fontSize: 10, color: colors.text3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              StatChip(
+                label: l10n.t('requests'),
+                value: fmtInt(stat.requestCount),
+              ),
+              StatChip(
+                label: l10n.t('totalTokensShort'),
+                value: fmtTokens(stat.totalTokens),
+              ),
+              StatChip(
+                label: l10n.t('input'),
+                value: fmtTokens(stat.totalInputTokens),
+              ),
+              StatChip(
+                label: l10n.t('output'),
+                value: fmtTokens(stat.totalOutputTokens),
+              ),
+              StatChip(
+                label: l10n.t('colReasoning'),
+                value: fmtTokens(stat.totalReasoningTokens),
+              ),
+              StatChip(
+                label: l10n.t('cacheReadTokens'),
+                value: fmtTokens(stat.cacheHitTokens),
+              ),
+              StatChip(
+                label: l10n.t('cacheWriteTokens'),
+                value: fmtTokens(stat.cacheWriteTokens),
+              ),
+              StatChip(
+                label: l10n.t('sessions'),
+                value: fmtInt(stat.sessionCount),
               ),
             ],
           ),

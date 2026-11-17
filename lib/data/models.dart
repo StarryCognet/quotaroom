@@ -345,6 +345,37 @@ class SessionStat {
       totalInputTokens + totalOutputTokens + totalReasoningTokens;
 }
 
+class KeyStat {
+  const KeyStat({
+    required this.keyId,
+    this.requestCount = 0,
+    this.sessionCount = 0,
+    this.totalInputTokens = 0,
+    this.uncachedInputTokens = 0,
+    this.totalOutputTokens = 0,
+    this.totalReasoningTokens = 0,
+    this.cacheHitTokens = 0,
+    this.cacheWriteTokens = 0,
+    this.totalCostUsd = 0,
+    this.lastAt,
+  });
+
+  final String keyId;
+  final int requestCount;
+  final int sessionCount;
+  final int totalInputTokens;
+  final int uncachedInputTokens;
+  final int totalOutputTokens;
+  final int totalReasoningTokens;
+  final int cacheHitTokens;
+  final int cacheWriteTokens;
+  final double totalCostUsd;
+  final DateTime? lastAt;
+
+  int get totalTokens =>
+      totalInputTokens + totalOutputTokens + totalReasoningTokens;
+}
+
 class SyncState {
   const SyncState({
     this.lastSyncAt,

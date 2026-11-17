@@ -128,6 +128,26 @@ void main() {
     expect(sessions.records.any((s) => s.sessionId.isEmpty), isTrue);
   });
 
+  test('key stats aggregate each key and sort by token volume', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'a', at: now, key: 'sk_a', input: 100, output: 50, reasoning: 0),
+      _rec(id: 'b', at: now, key: 'sk_a', input: 50, output: 20, reasoning: 0),
+      _rec(id: 'c', at: now, key: 'sk_b', input: 500, output: 100, reasoning: 0),
+      _rec(id: 'd', at: now, key: '', input: 10, output: 5, reasoning: 0),
+    ], accountId);
+    final stats = await repo.keyStats(accountId);
+    expect(stats, hasLength(3));
+    expect(stats.first.keyId, 'sk_b');
+    expect(stats.first.totalTokens, 600);
+    final skA = stats.firstWhere((stat) => stat.keyId == 'sk_a');
+    expect(skA.requestCount, 2);
+    expect(skA.totalInputTokens, 150);
+    expect(skA.totalOutputTokens, 70);
+    final unassigned = stats.firstWhere((stat) => stat.keyId.isEmpty);
+    expect(unassigned.totalTokens, 15);
+  });
+
   test('records page filters by model and paginates', () async {
     final now = DateTime.now();
     await repo.insertUsageRecords([

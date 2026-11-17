@@ -216,7 +216,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            l10n.t('pageFoot', {'version': '1.1.0'}),
+            l10n.t('pageFoot', {'version': '1.2.0'}),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 10.5, color: colors.text3),
           ),

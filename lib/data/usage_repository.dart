@@ -346,6 +346,47 @@ class UsageRepository {
     );
   }
 
+  Future<List<KeyStat>> keyStats(int accountId) async {
+    final rows = await db.rawQuery('''
+      SELECT key_id,
+             COUNT(*) AS request_count,
+             COUNT(DISTINCT CASE WHEN session_id IS NOT NULL AND session_id != ''
+                                 THEN session_id END) AS session_count,
+             SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
+                 + cache_write_1h_tokens) AS total_input_tokens,
+             SUM(input_tokens) AS uncached_input_tokens,
+             SUM(output_tokens) AS total_output_tokens,
+             SUM(reasoning_tokens) AS total_reasoning_tokens,
+             SUM(cache_read_tokens) AS cache_hit_tokens,
+             SUM(cache_write_5m_tokens + cache_write_1h_tokens) AS cache_write_tokens,
+             SUM(cost_usd) AS total_cost_usd,
+             MAX(created_ms) AS last_ms
+      FROM usage_records
+      WHERE account_id = ?
+      GROUP BY key_id
+      ORDER BY (SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
+                    + cache_write_1h_tokens) + SUM(output_tokens)) DESC
+    ''', [accountId]);
+    return rows.map((row) {
+      final lastMs = _int(row['last_ms']);
+      return KeyStat(
+        keyId: (row['key_id'] ?? '').toString(),
+        requestCount: _int(row['request_count']),
+        sessionCount: _int(row['session_count']),
+        totalInputTokens: _int(row['total_input_tokens']),
+        uncachedInputTokens: _int(row['uncached_input_tokens']),
+        totalOutputTokens: _int(row['total_output_tokens']),
+        totalReasoningTokens: _int(row['total_reasoning_tokens']),
+        cacheHitTokens: _int(row['cache_hit_tokens']),
+        cacheWriteTokens: _int(row['cache_write_tokens']),
+        totalCostUsd: _double(row['total_cost_usd']),
+        lastAt: lastMs <= 0
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(lastMs, isUtc: true),
+      );
+    }).toList();
+  }
+
   Future<List<String>> models(int accountId) async {
     final rows = await db.query(
       'usage_records',

@@ -20,20 +20,25 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 | --- | --- |
 | ![统计](docs/screenshot-stats.png) | ![记录](docs/screenshot-records.png) |
 
-| 账号 | 深色模式 |
+| Key 用量 | 账号 |
 | --- | --- |
-| ![账号](docs/screenshot-accounts.png) | ![深色](docs/screenshot-dark.png) |
+| ![Key 用量](docs/screenshot-keys.png) | ![账号](docs/screenshot-accounts.png) |
+
+| 深色模式 | 关于 |
+| --- | --- |
+| ![深色](docs/screenshot-dark.png) | ![关于](docs/screenshot-about.png) |
 
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v1.1.0 直链：[QuotaRoom-v1.1.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.1.0/QuotaRoom-v1.1.0.apk)
-- SHA-256：`a9b0cc03b5e6d0c85f8e893313d098d953ad045ea76049985f10af60d664612d`
+- v1.2.0 直链：[QuotaRoom-v1.2.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.2.0/QuotaRoom-v1.2.0.apk)
+- SHA-256：`84a97d56ea99d0e5e7c1decbc975b5c5c5f0e75b3581e3679fbfdf443e94ccff`
 
 > 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
+- **v1.2.0**：记录页新增「Key 用量」Tab，按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间；会话与记录列表移除分页器，滚动到底自动加载更多；新增 keyStats 聚合查询与测试；版本 1.2.0。
 - **v1.1.0**：UI/UX 重构——首页配额合并为紧凑三行、KPI 减到 4 个、趋势图上移；配额改为「已用% + 剩余% + 绝对重置时间」并加入健康度配色；本地数据优先渲染、配额异步刷新；首页/统计/记录/账号下拉刷新统一；记录页固定分页器 + 紧凑卡片与短时间格式；统计页改为 KPI → 趋势 → 模型 → Token 构成；账号页账户卡前置；暗色对比度、图表字号、同步状态点、首次同步提示；补充异常隔离。
 - **v1.0.1**：修复登录后自动同步定时器未启动、记录/会话页同步后不刷新、退出当前账号后出现空账号面板、模型环形图超过 5 个模型时总数漏算；新增「项目主页 / 问题反馈」入口；版本号 1.0.1。
 - **v1.0.0**：首个 QuotaRoom 版本。
@@ -61,7 +66,8 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 - 模型用量环形图 + 排行，支持输入 / 输出 / 成本维度切换
 - 30 天用量趋势（Token / 请求 / 费用双轴）
 - 会话用量聚合（按 sessionID 分组，无 session 时按 key 拆分）
-- 请求级使用记录，分页 + 模型筛选
+- Key 用量：按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间
+- 请求级使用记录，滑到底自动加载 + 模型筛选
 - 多账号：添加 / 切换 / 重命名 / 重新登录 / 退出 / 删除
 - 自动增量同步（1/5/15/30 分钟），同步范围（30/60/90/180 天 / 全部）
 - 浅色 / 深色 / 跟随系统，中文 / English，CNY / USD
@@ -74,7 +80,7 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v1.0.0.apk
+adb install -r QuotaRoom-v1.2.0.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。
@@ -153,9 +159,9 @@ assets/
 ## 验证
 
 - `flutter analyze`：无问题
-- `flutter test`：28 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、分页、去重、裁剪、增量游标、配额缓存）
+- `flutter test`：29 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、Key 聚合、分页、去重、裁剪、增量游标、配额缓存）
 - `flutter build apk --release`：构建成功
-- 已在 Android 15 x86_64 模拟器上实测：登录页、WebView 打开 opencode.ai 登录页、首页/统计/记录/账号/设置/关于、深色模式、中英切换、模型筛选、开源许可页
+- 已在 Android 15 x86_64 模拟器上实测：登录页、WebView 打开 opencode.ai 登录页、首页/统计/记录/账号/设置/关于、Key 用量、滑到底自动加载、深色模式、中英切换、模型筛选、开源许可页
 
 ## 已知限制
 
