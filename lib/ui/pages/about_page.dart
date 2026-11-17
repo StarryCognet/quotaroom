@@ -12,6 +12,9 @@ import 'licenses_page.dart';
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
+  static const _projectUrl = 'https://github.com/StarryCognet/quotaroom';
+  static const _issuesUrl =
+      'https://github.com/StarryCognet/quotaroom/issues';
   static const _upstreamUrl =
       'https://github.com/yphyphyph/opencode-go-gauge';
   static const _openCodeUrl = 'https://opencode.ai';
@@ -151,6 +154,20 @@ class AboutPage extends StatelessWidget {
             child: Column(
               children: [
                 _LinkRow(
+                  icon: Icons.home_outlined,
+                  label: l10n.t('projectHome'),
+                  value: 'github.com/StarryCognet/quotaroom',
+                  onTap: () => _open(context, _projectUrl),
+                ),
+                Divider(height: 1, color: colors.border),
+                _LinkRow(
+                  icon: Icons.bug_report_outlined,
+                  label: l10n.t('feedback'),
+                  value: 'github.com/StarryCognet/quotaroom/issues',
+                  onTap: () => _open(context, _issuesUrl),
+                ),
+                Divider(height: 1, color: colors.border),
+                _LinkRow(
                   icon: Icons.code_rounded,
                   label: l10n.t('upstream'),
                   value: 'github.com/yphyphyph/opencode-go-gauge',
@@ -193,7 +210,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            l10n.t('pageFoot', {'version': '1.0.0'}),
+            l10n.t('pageFoot', {'version': '1.0.1'}),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 10.5, color: colors.text3),
           ),

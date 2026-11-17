@@ -86,6 +86,7 @@ class _SessionsTabState extends State<_SessionsTab> {
   static const int _pageSize = 10;
 
   int? _accountId;
+  DateTime? _lastSyncAt;
   int _page = 1;
   SessionsPageResult? _data;
   bool _loading = false;
@@ -94,9 +95,13 @@ class _SessionsTabState extends State<_SessionsTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.watch<AppState>().activeAccount?.id;
-    if (id != _accountId) {
+    final state = context.watch<AppState>();
+    final id = state.activeAccount?.id;
+    final syncAt = state.dashboard?.sync.lastSyncAt;
+    final syncChanged = syncAt != null && syncAt != _lastSyncAt;
+    if (id != _accountId || syncChanged) {
       _accountId = id;
+      _lastSyncAt = syncAt;
       _page = 1;
       _data = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -345,6 +350,7 @@ class _RecordsTabState extends State<_RecordsTab> {
   static const int _pageSize = 15;
 
   int? _accountId;
+  DateTime? _lastSyncAt;
   int _page = 1;
   String _model = '';
   List<String> _models = const [];
@@ -355,9 +361,13 @@ class _RecordsTabState extends State<_RecordsTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final id = context.watch<AppState>().activeAccount?.id;
-    if (id != _accountId) {
+    final state = context.watch<AppState>();
+    final id = state.activeAccount?.id;
+    final syncAt = state.dashboard?.sync.lastSyncAt;
+    final syncChanged = syncAt != null && syncAt != _lastSyncAt;
+    if (id != _accountId || syncChanged) {
       _accountId = id;
+      _lastSyncAt = syncAt;
       _page = 1;
       _model = '';
       _data = null;
@@ -377,9 +387,7 @@ class _RecordsTabState extends State<_RecordsTab> {
       _error = null;
     });
     try {
-      final models = _models.isEmpty
-          ? await state.usageRepo.models(account.id)
-          : _models;
+      final models = await state.usageRepo.models(account.id);
       final data = await state.usageRepo.recordsPage(
         account.id,
         page: _page,

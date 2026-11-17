@@ -99,6 +99,10 @@ void main() {
       );
       expect(OpenCodeApi.buildCookieHeader('auth=Fe26.2'), 'auth=Fe26.2');
       expect(
+        OpenCodeApi.buildCookieHeader('a=1; auth=Fe26.2; b=2'),
+        'auth=Fe26.2',
+      );
+      expect(
         OpenCodeApi.buildCookieHeader('Cookie: a=1; __Host-console_session=st_x'),
         '__Host-console_session=st_x',
       );
@@ -148,6 +152,18 @@ void main() {
   });
 
   group('request log parsing', () {
+    test('skips incomplete and non-inference items', () {
+      final page = OpenCodeApi.parseRequestLogs({
+        'items': [
+          {'id': '', 'startedAt': 1, 'category': 'inference'},
+          {'id': 'a', 'category': 'inference'},
+          {'id': 'b', 'startedAt': 1, 'category': 'api'},
+          {'id': 'c', 'startedAt': 1, 'category': 'inference', 'model': 'm'},
+        ],
+      });
+      expect(page.records.map((record) => record.usgId), ['c']);
+    });
+
     test('filters api calls, parses string cost and cache-write column', () {
       final page = OpenCodeApi.parseRequestLogs(_requestLogs);
       expect(page.records, hasLength(2));

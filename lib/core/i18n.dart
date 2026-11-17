@@ -177,6 +177,7 @@ class L10n {
     'perReq': '/次',
     'dedup': '去重 sessionID',
     'noData': '暂无记录',
+    'other': '其他',
     'loadFailed': '加载失败',
     'totalN': '共',
     'items': '条',
@@ -285,6 +286,8 @@ class L10n {
     'licenseIntro': 'QuotaRoom 是 GoGauge (opencode-go-gauge) 的 Android/Flutter 移植版，按 MIT 协议分发。以下为完整许可文本。模型名称与品牌图标归其各自所有者所有。',
     'about': '关于 QuotaRoom',
     'upstream': '上游项目',
+    'projectHome': '项目主页',
+    'feedback': '问题反馈',
     'dataPrivacy': '数据与隐私',
     'dataPrivacyDesc':
         '用量数据保存在本机 SQLite；登录 Cookie 存放在 Android Keystore 加密存储中，仅用于请求 opencode.ai 官方接口。',
@@ -469,6 +472,7 @@ class L10n {
     'perReq': '/req',
     'dedup': 'dedup sessionID',
     'noData': 'No records',
+    'other': 'Other',
     'loadFailed': 'Failed to load',
     'totalN': 'Total',
     'items': 'records',
@@ -581,6 +585,8 @@ class L10n {
     'licenseIntro': 'QuotaRoom is an Android/Flutter port of GoGauge (opencode-go-gauge), distributed under the MIT License. The full text follows. Model names and brand icons belong to their respective owners.',
     'about': 'About QuotaRoom',
     'upstream': 'Upstream project',
+    'projectHome': 'Project Home',
+    'feedback': 'Feedback',
     'dataPrivacy': 'Data & privacy',
     'dataPrivacyDesc':
         'Usage data is stored in local SQLite; the session cookie is kept in Android Keystore-backed secure storage and only used for official opencode.ai APIs.',

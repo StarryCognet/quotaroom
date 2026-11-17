@@ -59,6 +59,7 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
 
   Future<void> _initialize() async {
     await CookieBridge.clearCookies();
+    if (!mounted) return;
     await _controller.loadRequest(Uri.parse(OpenCodeApi.loginUrl));
     if (mounted) setState(() => _ready = true);
   }

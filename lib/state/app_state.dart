@@ -88,6 +88,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       settings = await settingsRepo.getSettings();
       keyNames = await settingsRepo.getKeyNames();
       await reloadAccounts();
+      await _ensureActiveLoggedIn();
       _progressSubscription = syncService.progressStream.listen((value) {
         progress = value;
         notifyListeners();
@@ -211,6 +212,21 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// If the configured active account is signed out but another account is
+  /// still signed in, switch to the signed-in one instead of showing an empty
+  /// dashboard.
+  Future<void> _ensureActiveLoggedIn() async {
+    final current = activeAccount;
+    if (current != null && current.hasToken) return;
+    for (final account in accounts) {
+      if (account.hasToken) {
+        await accountRepo.setActive(account.id);
+        await reloadAccounts();
+        return;
+      }
+    }
+  }
+
   Future<void> setRange(String range) async {
     if (dashboardRange == range) return;
     dashboardRange = range;
@@ -257,6 +273,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     await refreshDashboard(forceQuota: true);
     await refreshOverviews();
+    startAutoSync();
     // First login pulls the 30-day history in the background.
     unawaited(_backgroundFullSync());
   }
@@ -282,6 +299,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     syncService.clearQuotaCache(account.id);
     notifyListeners();
     await refreshDashboard(forceQuota: true);
+    startAutoSync();
     unawaited(_backgroundFullSync());
   }
 
@@ -292,6 +310,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       keyNames = await settingsRepo.getKeyNames();
       await refreshDashboard(forceQuota: true);
       await refreshOverviews();
+    } else {
+      errorMessage = result.error;
     }
     notifyListeners();
   }
@@ -315,12 +335,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await accountRepo.deleteAccount(accountId);
     syncService.clearQuotaCache(accountId);
     await reloadAccounts();
+    await _ensureActiveLoggedIn();
     if (hasLoggedInAccount) {
       await refreshDashboard(forceQuota: true);
     } else {
       dashboard = null;
     }
     await refreshOverviews();
+    startAutoSync();
     notifyListeners();
   }
 
@@ -334,6 +356,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await accountRepo.logoutAccount(accountId);
     syncService.clearQuotaCache(accountId);
     await reloadAccounts();
+    await _ensureActiveLoggedIn();
     if (hasLoggedInAccount) {
       await refreshDashboard(forceQuota: true);
       await refreshOverviews();
@@ -341,6 +364,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       dashboard = null;
       overviews = const [];
     }
+    startAutoSync();
     notifyListeners();
   }
 

@@ -209,7 +209,10 @@ class ModelDonut extends StatelessWidget {
       if (value > 0) entries.add((stat: model, value: value));
     }
     entries.sort((a, b) => b.value.compareTo(a.value));
-    final top = entries.take(6).toList();
+    final top = entries.take(5).toList();
+    final otherTotal = entries
+        .skip(5)
+        .fold<double>(0, (sum, entry) => sum + entry.value);
     if (top.isEmpty) {
       return EmptyState(
         icon: Icons.donut_large_rounded,
@@ -217,7 +220,7 @@ class ModelDonut extends StatelessWidget {
         compact: true,
       );
     }
-    final total = top.fold<double>(0, (sum, entry) => sum + entry.value);
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.value);
     final centerLabel = switch (dimension) {
       'output' => l10n.t('outputTokens'),
       'cost' => l10n.t('totalCost'),
@@ -242,6 +245,13 @@ class ModelDonut extends StatelessWidget {
                       PieChartSectionData(
                         value: top[i].value,
                         color: _palette[i % _palette.length],
+                        radius: 24,
+                        showTitle: false,
+                      ),
+                    if (otherTotal > 0)
+                      PieChartSectionData(
+                        value: otherTotal,
+                        color: const Color(0xFF94A3B8),
                         radius: 24,
                         showTitle: false,
                       ),
@@ -318,6 +328,54 @@ class ModelDonut extends StatelessWidget {
                   width: 40,
                   child: Text(
                     '${(top[i].value / total * 100).toStringAsFixed(1)}%',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 10.5, color: colors.text3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (otherTotal > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF94A3B8),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.more_horiz_rounded, size: 15, color: colors.text3),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    l10n.t('other'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: colors.text2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  dimension == 'cost'
+                      ? fmtMoney(otherTotal, currency: currency, rate: rate)
+                      : fmtTokens(otherTotal),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    '${(otherTotal / total * 100).toStringAsFixed(1)}%',
                     textAlign: TextAlign.right,
                     style: TextStyle(fontSize: 10.5, color: colors.text3),
                   ),

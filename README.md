@@ -27,10 +27,15 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v1.0.0 直链：[QuotaRoom-v1.0.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.0.0/QuotaRoom-v1.0.0.apk)
-- SHA-256：`ee16def994a096a856c0c81684a9e5978566092ba1fbd3741a84718f16d0c221`
+- v1.0.1 直链：[QuotaRoom-v1.0.1.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.0.1/QuotaRoom-v1.0.1.apk)
+- SHA-256：`1577a1f5dc1105ffa07174e117f5139f5e2898d070a2c9b9d60cc5be20e9c4ac`
 
 > 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
+
+## 更新记录
+
+- **v1.0.1**：修复登录后自动同步定时器未启动、记录/会话页同步后不刷新、退出当前账号后出现空账号面板、模型环形图超过 5 个模型时总数漏算；新增「项目主页 / 问题反馈」入口；版本号 1.0.1。
+- **v1.0.0**：首个 QuotaRoom 版本。
 
 ## 来源与声明 / Source & Attribution
 
@@ -147,7 +152,7 @@ assets/
 ## 验证
 
 - `flutter analyze`：无问题
-- `flutter test`：24 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、分页、去重、裁剪、增量游标、配额缓存）
+- `flutter test`：28 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、分页、去重、裁剪、增量游标、配额缓存）
 - `flutter build apk --release`：构建成功
 - 已在 Android 15 x86_64 模拟器上实测：登录页、WebView 打开 opencode.ai 登录页、首页/统计/记录/账号/设置/关于、深色模式、中英切换、模型筛选、开源许可页
 
