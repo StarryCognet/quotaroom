@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
+import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
@@ -22,54 +23,85 @@ class RecordsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SectionHeader(title: l10n.t('recordsPage')),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: colors.muted,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TabBar(
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                color: colors.card,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 1),
-                  ),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: colors.muted,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: TabBar(
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: colors.card,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+                labelColor: colors.primary,
+                unselectedLabelColor: colors.text3,
+                labelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                tabs: [
+                  Tab(height: 36, text: l10n.t('sessionUsage')),
+                  Tab(height: 36, text: l10n.t('usageRecords')),
                 ],
               ),
-              labelColor: colors.primary,
-              unselectedLabelColor: colors.text3,
-              labelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-              tabs: [
-                Tab(height: 36, text: l10n.t('sessionUsage')),
-                Tab(height: 36, text: l10n.t('usageRecords')),
-              ],
             ),
           ),
-          const SizedBox(height: 8),
           const Expanded(
             child: TabBarView(
               children: [_SessionsTab(), _RecordsTab()],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PagerFooter extends StatelessWidget {
+  const _PagerFooter({
+    required this.page,
+    required this.totalPages,
+    required this.onPrev,
+    required this.onNext,
+    required this.l10n,
+  });
+
+  final int page;
+  final int totalPages;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final L10n l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Pager(
+        page: page,
+        totalPages: totalPages,
+        onPrev: onPrev,
+        onNext: onNext,
+        l10n: l10n,
       ),
     );
   }
@@ -98,12 +130,18 @@ class _SessionsTabState extends State<_SessionsTab> {
     final state = context.watch<AppState>();
     final id = state.activeAccount?.id;
     final syncAt = state.dashboard?.sync.lastSyncAt;
+    final accountChanged = id != _accountId;
     final syncChanged = syncAt != null && syncAt != _lastSyncAt;
-    if (id != _accountId || syncChanged) {
+    if (accountChanged) {
       _accountId = id;
       _lastSyncAt = syncAt;
       _page = 1;
       _data = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    } else if (syncChanged) {
+      _lastSyncAt = syncAt;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _load();
       });
@@ -138,6 +176,13 @@ class _SessionsTabState extends State<_SessionsTab> {
     }
   }
 
+  Future<void> _refresh() async {
+    await context.read<AppState>().syncNow();
+    if (!mounted) return;
+    setState(() => _page = 1);
+    await _load();
+  }
+
   void _goTo(int page) {
     setState(() => _page = page);
     _load();
@@ -161,11 +206,11 @@ class _SessionsTabState extends State<_SessionsTab> {
     final data = _data;
     if (data == null || data.records.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: _refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            const SizedBox(height: 60),
+            const SizedBox(height: 50),
             EmptyState(
               icon: Icons.forum_outlined,
               title: l10n.t('emptySessions'),
@@ -176,37 +221,46 @@ class _SessionsTabState extends State<_SessionsTab> {
       );
     }
     final totalPages = (data.total / _pageSize).ceil().clamp(1, 1 << 30).toInt();
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-        itemCount: data.records.length + 2,
-        separatorBuilder: (context, index) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return Text(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
               l10n.t('sessionsTotal', {'n': fmtInt(data.total)}),
               style: TextStyle(fontSize: 11, color: colors.text3),
-            );
-          }
-          if (index == data.records.length + 1) {
-            return Pager(
-              page: _page,
-              totalPages: totalPages,
-              onPrev: () => _goTo(_page - 1),
-              onNext: () => _goTo(_page + 1),
-              l10n: l10n,
-            );
-          }
-          final session = data.records[index - 1];
-          return _SessionCard(
-            session: session,
-            keyName: state.keyNames[session.keyId] ?? '',
-            state: state,
-          );
-        },
-      ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              itemCount: data.records.length,
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 7),
+              itemBuilder: (context, index) {
+                final session = data.records[index];
+                return _SessionCard(
+                  session: session,
+                  keyName: state.keyNames[session.keyId] ?? '',
+                  state: state,
+                );
+              },
+            ),
+          ),
+        ),
+        _PagerFooter(
+          page: _page,
+          totalPages: totalPages,
+          onPrev: () => _goTo(_page - 1),
+          onNext: () => _goTo(_page + 1),
+          l10n: l10n,
+        ),
+      ],
     );
   }
 }
@@ -241,30 +295,36 @@ class _SessionCard extends StatelessWidget {
       dayAgo: l10n.t('dayAgo'),
     );
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.primarySoft,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  keyLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: colors.primary,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 110),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primarySoft,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    keyLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: colors.primary,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
                   sessionLabel,
@@ -278,60 +338,48 @@ class _SessionCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 last,
-                style: TextStyle(fontSize: 10.5, color: colors.text3),
+                style: TextStyle(fontSize: 10, color: colors.text3),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const columns = 2;
-              final width = (constraints.maxWidth - 8) / columns;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _Metric(
-                    width: width,
-                    label: l10n.t('requests'),
-                    value: fmtInt(session.requestCount),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('totalTokensShort'),
-                    value: fmtTokens(session.totalTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('input'),
-                    value: fmtTokens(session.totalInputTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('output'),
-                    value: fmtTokens(session.totalOutputTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('colReasoning'),
-                    value: fmtTokens(session.totalReasoningTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('totalCost'),
-                    value: fmtMoney(
-                      session.totalCostUsd,
-                      currency: state.currency,
-                      rate: state.usdCny,
-                    ),
-                    highlight: colors.amber,
-                  ),
-                ],
-              );
-            },
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              StatChip(
+                label: l10n.t('requests'),
+                value: fmtInt(session.requestCount),
+              ),
+              StatChip(
+                label: l10n.t('totalTokensShort'),
+                value: fmtTokens(session.totalTokens),
+              ),
+              StatChip(
+                label: l10n.t('input'),
+                value: fmtTokens(session.totalInputTokens),
+              ),
+              StatChip(
+                label: l10n.t('output'),
+                value: fmtTokens(session.totalOutputTokens),
+              ),
+              StatChip(
+                label: l10n.t('colReasoning'),
+                value: fmtTokens(session.totalReasoningTokens),
+              ),
+              StatChip(
+                label: l10n.t('totalCost'),
+                value: fmtMoney(
+                  session.totalCostUsd,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                ),
+                highlight: colors.amber,
+              ),
+            ],
           ),
         ],
       ),
@@ -364,14 +412,20 @@ class _RecordsTabState extends State<_RecordsTab> {
     final state = context.watch<AppState>();
     final id = state.activeAccount?.id;
     final syncAt = state.dashboard?.sync.lastSyncAt;
+    final accountChanged = id != _accountId;
     final syncChanged = syncAt != null && syncAt != _lastSyncAt;
-    if (id != _accountId || syncChanged) {
+    if (accountChanged) {
       _accountId = id;
       _lastSyncAt = syncAt;
       _page = 1;
       _model = '';
       _data = null;
       _models = const [];
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    } else if (syncChanged) {
+      _lastSyncAt = syncAt;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _load();
       });
@@ -407,6 +461,13 @@ class _RecordsTabState extends State<_RecordsTab> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refresh() async {
+    await context.read<AppState>().syncNow();
+    if (!mounted) return;
+    setState(() => _page = 1);
+    await _load();
   }
 
   void _goTo(int page) {
@@ -488,7 +549,7 @@ class _RecordsTabState extends State<_RecordsTab> {
     }
     final data = _data;
     final filterRow = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
       child: Row(
         children: [
           Expanded(
@@ -499,17 +560,23 @@ class _RecordsTabState extends State<_RecordsTab> {
               style: TextStyle(fontSize: 11, color: colors.text3),
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: _pickModel,
-            icon: const Icon(Icons.filter_list_rounded, size: 15),
-            label: Text(
-              _model.isEmpty ? l10n.t('allModels') : _model,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              textStyle: const TextStyle(fontSize: 11.5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 190),
+            child: OutlinedButton.icon(
+              onPressed: _pickModel,
+              icon: const Icon(Icons.filter_list_rounded, size: 15),
+              label: Text(
+                _model.isEmpty ? l10n.t('allModels') : _model,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 7,
+                ),
+                textStyle: const TextStyle(fontSize: 11.5),
+              ),
             ),
           ),
         ],
@@ -521,7 +588,7 @@ class _RecordsTabState extends State<_RecordsTab> {
           filterRow,
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: _refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -544,31 +611,30 @@ class _RecordsTabState extends State<_RecordsTab> {
         filterRow,
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _load,
+            onRefresh: _refresh,
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 2, 16, 20),
-              itemCount: data.records.length + 1,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              itemCount: data.records.length,
               separatorBuilder: (context, index) =>
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
               itemBuilder: (context, index) {
-                if (index == data.records.length) {
-                  return Pager(
-                    page: _page,
-                    totalPages: totalPages,
-                    onPrev: () => _goTo(_page - 1),
-                    onNext: () => _goTo(_page + 1),
-                    l10n: l10n,
-                  );
-                }
+                final record = data.records[index];
                 return _RecordCard(
-                  record: data.records[index],
+                  record: record,
                   state: state,
-                  keyName: state.keyNames[data.records[index].keyId] ?? '',
+                  keyName: state.keyNames[record.keyId] ?? '',
                 );
               },
             ),
           ),
+        ),
+        _PagerFooter(
+          page: _page,
+          totalPages: totalPages,
+          onPrev: () => _goTo(_page - 1),
+          onNext: () => _goTo(_page + 1),
+          l10n: l10n,
         ),
       ],
     );
@@ -595,14 +661,14 @@ class _RecordCard extends StatelessWidget {
         ? l10n.t('unassigned')
         : (keyName.isNotEmpty ? keyName : truncateMiddle(record.keyId, 16));
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(13, 10, 13, 11),
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              ModelIcon(model: record.model, size: 17),
-              const SizedBox(width: 7),
+              ModelIcon(model: record.model, size: 16),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   record.model.isEmpty ? '—' : record.model,
@@ -616,29 +682,29 @@ class _RecordCard extends StatelessWidget {
                 ),
               ),
               if (plan.isNotEmpty) ...[
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
+                    horizontal: 5,
+                    vertical: 1.5,
                   ),
                   decoration: BoxDecoration(
                     color: colors.muted,
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     plan,
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 8.5,
                       fontWeight: FontWeight.w700,
                       color: colors.text3,
                     ),
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
-                fmtDateTime(record.createdAt),
+                fmtDateTimeShort(record.createdAt),
                 style: TextStyle(
                   fontSize: 10,
                   color: colors.text3,
@@ -648,105 +714,58 @@ class _RecordCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 3),
-          Text(
-            keyLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10, color: colors.text3),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  keyLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: colors.text3),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                fmtMoney(
+                  record.costUsd,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                ),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: colors.amber,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 9),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 520 ? 3 : 2;
-              final width =
-                  (constraints.maxWidth - 8 * (columns - 1)) / columns;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _Metric(
-                    width: width,
-                    label: l10n.t('input'),
-                    value: fmtTokens(record.inputTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('output'),
-                    value: fmtTokens(record.outputTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('colReasoning'),
-                    value: fmtTokens(record.reasoningTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('cacheReadTokens'),
-                    value: fmtTokens(record.cacheReadTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('cacheWriteTokens'),
-                    value: fmtTokens(record.cacheWriteTokens),
-                  ),
-                  _Metric(
-                    width: width,
-                    label: l10n.t('totalCost'),
-                    value: fmtMoney(
-                      record.costUsd,
-                      currency: state.currency,
-                      rate: state.usdCny,
-                    ),
-                    highlight: colors.amber,
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.width,
-    required this.label,
-    required this.value,
-    this.highlight,
-  });
-
-  final double width;
-  final String label;
-  final String value;
-  final Color? highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return SizedBox(
-      width: width,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10.5, color: colors.text3),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: highlight ?? colors.text,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              StatChip(
+                label: l10n.t('input'),
+                value: fmtTokens(record.inputTokens),
+              ),
+              StatChip(
+                label: l10n.t('output'),
+                value: fmtTokens(record.outputTokens),
+              ),
+              StatChip(
+                label: l10n.t('colReasoning'),
+                value: fmtTokens(record.reasoningTokens),
+              ),
+              StatChip(
+                label: l10n.t('cacheReadTokens'),
+                value: fmtTokens(record.cacheReadTokens),
+              ),
+              StatChip(
+                label: l10n.t('cacheWriteTokens'),
+                value: fmtTokens(record.cacheWriteTokens),
+              ),
+            ],
           ),
         ],
       ),

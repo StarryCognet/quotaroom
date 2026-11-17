@@ -46,6 +46,14 @@ class _AppShellState extends State<AppShell> {
     final subtitle = state.hasLoggedInAccount
         ? '${l10n.t('lastSync')} $lastSync · ${fmtInt(sync?.totalRecords ?? 0)} ${l10n.t('records')}'
         : l10n.t('notLoggedIn');
+    final syncDot = state.errorMessage != null
+        ? colors.red
+        : switch (state.dashboard?.sync.lastSyncStatus) {
+            'ok' => colors.green,
+            'partial' => colors.amber,
+            'error' => colors.red,
+            _ => colors.text3,
+          };
     final dark = Theme.of(context).brightness == Brightness.dark;
     return PopScope(
       canPop: _index == 0,
@@ -76,12 +84,31 @@ class _AppShellState extends State<AppShell> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, color: colors.text3),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: syncDot,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.text3,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

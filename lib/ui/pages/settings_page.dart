@@ -32,8 +32,6 @@ class SettingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
-        SectionHeader(title: l10n.t('settingsTitle')),
-        const SizedBox(height: 12),
         SyncBanner(progress: state.progress, l10n: l10n),
         _SettingsCard(
           title: l10n.t('setAccount'),

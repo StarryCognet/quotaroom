@@ -41,7 +41,13 @@ class AboutPage extends StatelessWidget {
               letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
+          Text(
+            l10n.t('slogan'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11.5, color: colors.text3),
+          ),
+          const SizedBox(height: 5),
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snapshot) {
@@ -210,7 +216,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            l10n.t('pageFoot', {'version': '1.0.1'}),
+            l10n.t('pageFoot', {'version': '1.1.0'}),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 10.5, color: colors.text3),
           ),

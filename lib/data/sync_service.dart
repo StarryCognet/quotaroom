@@ -37,6 +37,7 @@ class SyncService {
   final StreamController<SyncProgress> _progressController =
       StreamController<SyncProgress>.broadcast();
   final Map<int, _QuotaCacheEntry> _quotaCache = {};
+  final Map<int, Future<QuotaResult>> _quotaInFlight = {};
 
   SyncProgress _state = SyncProgress.idle;
   SyncProgress get state => _state;
@@ -326,6 +327,9 @@ class SyncService {
     );
   }
 
+  /// Last known quota (possibly stale) for instant UI rendering.
+  QuotaResult? peekQuota(int accountId) => _quotaCache[accountId]?.result;
+
   /// Quota is cached per account for 30 seconds, failures included, matching
   /// the desktop server's retry-storm protection.
   Future<QuotaResult> quotaFor(
@@ -339,6 +343,18 @@ class SyncService {
         now.difference(cached.at).inSeconds < quotaCacheSeconds) {
       return cached.result;
     }
+    final inFlight = _quotaInFlight[account.id];
+    if (inFlight != null) return inFlight;
+    final future = _fetchQuota(account, now);
+    _quotaInFlight[account.id] = future;
+    try {
+      return await future;
+    } finally {
+      _quotaInFlight.remove(account.id);
+    }
+  }
+
+  Future<QuotaResult> _fetchQuota(Account account, DateTime now) async {
     final token = await accounts.tokenFor(account.id);
     if (token == null || token.trim().isEmpty) {
       final result = QuotaResult(

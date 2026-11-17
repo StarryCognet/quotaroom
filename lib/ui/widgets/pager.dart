@@ -30,7 +30,7 @@ class Pager extends StatelessWidget {
         ),
         Expanded(
           child: Text(
-            '${l10n.t('pageOf')} $page ${l10n.t('ofPages')} $totalPages',
+            l10n.t('pageInfo', {'page': page, 'total': totalPages}),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,

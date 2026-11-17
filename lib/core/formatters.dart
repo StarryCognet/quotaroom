@@ -48,6 +48,29 @@ String fmtDateTime(DateTime? dt) {
   return DateFormat('yyyy-MM-dd HH:mm:ss').format(local);
 }
 
+String fmtDateTimeShort(DateTime? dt) {
+  if (dt == null) return '—';
+  final local = dt.toLocal();
+  final now = DateTime.now();
+  final pattern = local.year == now.year ? 'MM-dd HH:mm' : 'yyyy-MM-dd HH:mm';
+  return DateFormat(pattern).format(local);
+}
+
+String fmtResetAt(DateTime? dt) {
+  if (dt == null) return '—';
+  final local = dt.toLocal();
+  final now = DateTime.now();
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    return DateFormat('HH:mm').format(local);
+  }
+  if (local.year == now.year) {
+    return DateFormat('MM-dd HH:mm').format(local);
+  }
+  return DateFormat('yyyy-MM-dd HH:mm').format(local);
+}
+
 String fmtDateShort(DateTime dt) {
   return DateFormat('MM-dd').format(dt.toLocal());
 }

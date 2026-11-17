@@ -26,42 +26,31 @@ class _StatsPageState extends State<StatsPage> {
     final data = state.dashboard;
     final colors = context.colors;
     if (data == null) {
-      return const Center(child: CircularProgressIndicator());
+      return state.loadingDashboard
+          ? const Center(child: CircularProgressIndicator())
+          : EmptyState(
+              icon: Icons.bar_chart_rounded,
+              title: l10n.t('noData'),
+              subtitle: l10n.t('syncHint'),
+              action: FilledButton(
+                onPressed: () => state.syncNow(),
+                child: Text(l10n.t('refresh')),
+              ),
+            );
     }
     final totals = data.totals;
     return RefreshIndicator(
-      onRefresh: () => state.refreshDashboard(forceQuota: true),
+      onRefresh: () => state.syncNow(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final header = SectionHeader(
-                title: l10n.t('statsTitle'),
-                subtitle: l10n.t('followRange'),
-              );
-              final range = RangeSelector(
-                value: state.dashboardRange,
-                onChanged: (value) => state.setRange(value),
-                l10n: l10n,
-              );
-              if (constraints.maxWidth >= 520) {
-                return Row(
-                  children: [
-                    Expanded(child: header),
-                    const SizedBox(width: 12),
-                    range,
-                  ],
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [header, const SizedBox(height: 10), range],
-              );
-            },
+          RangeSelector(
+            value: state.dashboardRange,
+            onChanged: (value) => state.setRange(value),
+            l10n: l10n,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _KpiRow(totals: totals, state: state),
           const SizedBox(height: 14),
           AppCard(
@@ -69,11 +58,20 @@ class _StatsPageState extends State<StatsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SectionHeader(
-                  title: l10n.t('tokenBreakdown'),
-                  subtitle: l10n.t('followRange'),
+                  title: l10n.t('usageTrend'),
+                  subtitle: l10n.t('totalTokenHint'),
+                  trailing: Text(
+                    l10n.t('trendHint'),
+                    style: TextStyle(fontSize: 11, color: colors.text3),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _TokenTiles(totals: totals, l10n: l10n),
+                const SizedBox(height: 10),
+                TrendLineChart(
+                  days: data.trend30,
+                  l10n: l10n,
+                  currency: state.currency,
+                  rate: state.usdCny,
+                ),
               ],
             ),
           ),
@@ -111,21 +109,9 @@ class _StatsPageState extends State<StatsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionHeader(
-                  title: l10n.t('usageTrend'),
-                  subtitle: l10n.t('totalTokenHint'),
-                  trailing: Text(
-                    l10n.t('trendHint'),
-                    style: TextStyle(fontSize: 11, color: colors.text3),
-                  ),
-                ),
+                SectionHeader(title: l10n.t('tokenBreakdown')),
                 const SizedBox(height: 10),
-                TrendLineChart(
-                  days: data.trend30,
-                  l10n: l10n,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                ),
+                _TokenTiles(totals: totals, l10n: l10n),
               ],
             ),
           ),
@@ -154,6 +140,7 @@ class _KpiRow extends StatelessWidget {
           rate: state.usdCny,
         ),
         color: colors.amber,
+        valueColor: colors.amber,
         icon: Icons.payments_outlined,
       ),
       KpiCard(
@@ -172,12 +159,14 @@ class _KpiRow extends StatelessWidget {
         label: l10n.t('hitRate'),
         value: '${totals.hitRate.toStringAsFixed(1)}%',
         color: colors.green,
+        valueColor: colors.green,
         icon: Icons.bolt_rounded,
       ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = (constraints.maxWidth - 10) / 2;
+        final columns = constraints.maxWidth >= 700 ? 4 : 2;
+        final width = (constraints.maxWidth - 10 * (columns - 1)) / columns;
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -210,8 +199,7 @@ class _TokenTiles extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 520 ? 3 : 2;
-        final width =
-            (constraints.maxWidth - (columns - 1) * 8) / columns;
+        final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
         return Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -220,8 +208,8 @@ class _TokenTiles extends StatelessWidget {
               Container(
                 width: width,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 10,
+                  horizontal: 10,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
                   color: colors.muted,
@@ -247,21 +235,21 @@ class _TokenTiles extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 11,
                               color: colors.text3,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
                         fmtTokens(item.$2),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: colors.text,
                           fontFeatures: const [FontFeature.tabularFigures()],

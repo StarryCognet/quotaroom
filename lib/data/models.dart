@@ -528,6 +528,19 @@ class DashboardData {
   final QuotaResult? quota;
   final SyncState sync;
   final String accountName;
+
+  DashboardData copyWith({QuotaResult? quota}) => DashboardData(
+    range: range,
+    totals: totals,
+    today: today,
+    daily7: daily7,
+    trend30: trend30,
+    todayTrend: todayTrend,
+    models: models,
+    quota: quota ?? this.quota,
+    sync: sync,
+    accountName: accountName,
+  );
 }
 
 class AccountOverview {

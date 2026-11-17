@@ -27,13 +27,14 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v1.0.1 直链：[QuotaRoom-v1.0.1.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.0.1/QuotaRoom-v1.0.1.apk)
-- SHA-256：`1577a1f5dc1105ffa07174e117f5139f5e2898d070a2c9b9d60cc5be20e9c4ac`
+- v1.1.0 直链：[QuotaRoom-v1.1.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v1.1.0/QuotaRoom-v1.1.0.apk)
+- SHA-256：`a9b0cc03b5e6d0c85f8e893313d098d953ad045ea76049985f10af60d664612d`
 
 > 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
+- **v1.1.0**：UI/UX 重构——首页配额合并为紧凑三行、KPI 减到 4 个、趋势图上移；配额改为「已用% + 剩余% + 绝对重置时间」并加入健康度配色；本地数据优先渲染、配额异步刷新；首页/统计/记录/账号下拉刷新统一；记录页固定分页器 + 紧凑卡片与短时间格式；统计页改为 KPI → 趋势 → 模型 → Token 构成；账号页账户卡前置；暗色对比度、图表字号、同步状态点、首次同步提示；补充异常隔离。
 - **v1.0.1**：修复登录后自动同步定时器未启动、记录/会话页同步后不刷新、退出当前账号后出现空账号面板、模型环形图超过 5 个模型时总数漏算；新增「项目主页 / 问题反馈」入口；版本号 1.0.1。
 - **v1.0.0**：首个 QuotaRoom 版本。
 

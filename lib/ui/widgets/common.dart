@@ -203,6 +203,7 @@ class KpiCard extends StatelessWidget {
     required this.color,
     required this.icon,
     this.sub,
+    this.valueColor,
   });
 
   final String label;
@@ -210,6 +211,7 @@ class KpiCard extends StatelessWidget {
   final Color color;
   final IconData icon;
   final String? sub;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +252,7 @@ class KpiCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 21,
                 fontWeight: FontWeight.w700,
-                color: color,
+                color: valueColor ?? colors.text,
                 fontFeatures: const [FontFeature.tabularFigures()],
                 letterSpacing: -0.4,
               ),
@@ -266,6 +268,52 @@ class KpiCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class StatChip extends StatelessWidget {
+  const StatChip({
+    super.key,
+    required this.label,
+    required this.value,
+    this.highlight,
+  });
+
+  final String label;
+  final String value;
+  final Color? highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.muted,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: TextStyle(fontSize: 9.5, color: colors.text3),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: highlight ?? colors.text,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

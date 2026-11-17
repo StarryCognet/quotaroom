@@ -102,7 +102,7 @@ class TodayTrendChart extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 4),
                       child: Text(
                         fmtTokens(value),
-                        style: TextStyle(fontSize: 9, color: colors.text3),
+                        style: TextStyle(fontSize: 10, color: colors.text3),
                       ),
                     ),
                   ),
@@ -121,7 +121,7 @@ class TodayTrendChart extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           points[hour].label.substring(0, 2),
-                          style: TextStyle(fontSize: 9, color: colors.text3),
+                          style: TextStyle(fontSize: 10, color: colors.text3),
                         ),
                       );
                     },
@@ -505,7 +505,7 @@ class TrendLineChart extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 4),
                       child: Text(
                         fmtTokens(value),
-                        style: TextStyle(fontSize: 9, color: colors.text3),
+                        style: TextStyle(fontSize: 10, color: colors.text3),
                       ),
                     ),
                   ),
@@ -521,7 +521,7 @@ class TrendLineChart extends StatelessWidget {
                         padding: const EdgeInsets.only(left: 4),
                         child: Text(
                           fmtMoney(value / costScale, currency: currency, rate: rate),
-                          style: TextStyle(fontSize: 8.5, color: colors.text3),
+                          style: TextStyle(fontSize: 9.5, color: colors.text3),
                         ),
                       );
                     },
@@ -544,7 +544,7 @@ class TrendLineChart extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           fmtDateShort(days[index].day),
-                          style: TextStyle(fontSize: 8.5, color: colors.text3),
+                          style: TextStyle(fontSize: 9.5, color: colors.text3),
                         ),
                       );
                     },

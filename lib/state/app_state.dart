@@ -106,7 +106,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
       if (hasLoggedInAccount) {
         await refreshDashboard();
-        await refreshOverviews();
+        try {
+          await refreshOverviews();
+        } catch (_) {
+          // Overview is secondary; the dashboard is already usable.
+        }
         startAutoSync();
       }
       initError = null;
@@ -150,7 +154,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     loadingDashboard = true;
     notifyListeners();
     try {
-      final quota = await syncService.quotaFor(account, force: forceQuota);
+      // Local aggregates first so a slow quota request never blocks the page.
       final totals = await usageRepo.totals(account.id, dashboardRange);
       final today = await usageRepo.totals(account.id, 'today');
       final daily7 = fillDays(
@@ -172,41 +176,61 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         trend30: trend30,
         todayTrend: todayTrend,
         models: models,
-        quota: quota,
+        quota: syncService.peekQuota(account.id),
         sync: sync,
         accountName: account.name,
       );
       errorMessage = null;
+      loadingDashboard = false;
+      notifyListeners();
+      unawaited(_refreshQuota(account, forceQuota));
     } catch (e) {
+      loadingDashboard = false;
       errorMessage = e.toString();
+      notifyListeners();
     }
-    loadingDashboard = false;
-    notifyListeners();
+  }
+
+  Future<void> _refreshQuota(Account account, bool force) async {
+    try {
+      final quota = await syncService.quotaFor(account, force: force);
+      if (activeAccount?.id != account.id) return;
+      final current = dashboard;
+      if (current == null) return;
+      dashboard = current.copyWith(quota: quota);
+      notifyListeners();
+    } catch (_) {
+      // Keep the cached quota; a transient quota error must not blank the page.
+    }
   }
 
   Future<void> refreshOverviews() async {
     final result = <AccountOverview>[];
     for (final account in accounts) {
       if (!account.hasToken) continue;
-      final quota = await syncService.quotaFor(account);
-      final today = await usageRepo.totals(account.id, 'today');
-      final todayTrend = await usageRepo.todayTrend(account.id);
-      final daily7 = fillDays(
-        await usageRepo.dailyStats(account.id, 7),
-        7,
-      );
-      final sync = await usageRepo.syncState(account.id);
-      result.add(
-        AccountOverview(
-          account: account,
-          quota: quota,
-          today: today,
-          todayTrend: todayTrend,
-          daily7: daily7,
-          lastSyncAt: sync.lastSyncAt,
-          lastSyncStatus: sync.lastSyncStatus,
-        ),
-      );
+      try {
+        final quota = await syncService.quotaFor(account);
+        final today = await usageRepo.totals(account.id, 'today');
+        final todayTrend = await usageRepo.todayTrend(account.id);
+        final daily7 = fillDays(
+          await usageRepo.dailyStats(account.id, 7),
+          7,
+        );
+        final sync = await usageRepo.syncState(account.id);
+        result.add(
+          AccountOverview(
+            account: account,
+            quota: quota,
+            today: today,
+            todayTrend: todayTrend,
+            daily7: daily7,
+            lastSyncAt: sync.lastSyncAt,
+            lastSyncStatus: sync.lastSyncStatus,
+          ),
+        );
+      } catch (_) {
+        // One broken account must not hide the others.
+      }
     }
     overviews = result;
     notifyListeners();
@@ -243,9 +267,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         : await syncService.syncIncremental();
     lastSyncResult = result;
     if (result.ok) {
-      keyNames = await settingsRepo.getKeyNames();
-      await refreshDashboard(forceQuota: true);
-      await refreshOverviews();
+      try {
+        keyNames = await settingsRepo.getKeyNames();
+        await refreshDashboard(forceQuota: true);
+        await refreshOverviews();
+      } catch (e) {
+        errorMessage = e.toString();
+      }
     } else {
       errorMessage = result.error;
     }
@@ -304,14 +332,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _backgroundFullSync() async {
-    final result = await syncService.syncFull();
-    lastSyncResult = result;
-    if (result.ok) {
-      keyNames = await settingsRepo.getKeyNames();
-      await refreshDashboard(forceQuota: true);
-      await refreshOverviews();
-    } else {
-      errorMessage = result.error;
+    try {
+      final result = await syncService.syncFull();
+      lastSyncResult = result;
+      if (result.ok) {
+        keyNames = await settingsRepo.getKeyNames();
+        await refreshDashboard(forceQuota: true);
+        await refreshOverviews();
+      } else {
+        errorMessage = result.error;
+      }
+    } catch (e) {
+      errorMessage = e.toString();
     }
     notifyListeners();
   }

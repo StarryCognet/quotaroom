@@ -18,9 +18,13 @@ class AccountsPage extends StatelessWidget {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final colors = context.colors;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
-      children: [
+    return RefreshIndicator(
+      onRefresh: () async {
+        await state.syncNow();
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
+        children: [
         Row(
           children: [
             Expanded(
@@ -46,10 +50,6 @@ class AccountsPage extends StatelessWidget {
             ),
           ],
         ),
-        if (state.settings.showAccountsPanel && state.overviews.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          _OverviewSummary(state: state),
-        ],
         const SizedBox(height: 14),
         for (var i = 0; i < state.accounts.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
@@ -59,6 +59,10 @@ class AccountsPage extends StatelessWidget {
             state: state,
           ),
         ],
+        if (state.settings.showAccountsPanel && state.overviews.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _OverviewSummary(state: state),
+        ],
         const SizedBox(height: 14),
         Text(
           l10n.t('addUserTip'),
@@ -66,6 +70,7 @@ class AccountsPage extends StatelessWidget {
           style: TextStyle(fontSize: 11, color: colors.text3, height: 1.5),
         ),
       ],
+      ),
     );
   }
 
@@ -159,6 +164,7 @@ class _OverviewSummary extends StatelessWidget {
                       rate: state.usdCny,
                     ),
                     color: colors.amber,
+                    valueColor: colors.amber,
                     icon: Icons.payments_outlined,
                   ),
                 ),
@@ -410,7 +416,6 @@ class _AccountCard extends StatelessWidget {
                       child: _MiniQuota(
                         window: overview.quota!.windows[i],
                         l10n: l10n,
-                        color: color,
                       ),
                     ),
                   ],
@@ -685,12 +690,10 @@ class _MiniQuota extends StatelessWidget {
   const _MiniQuota({
     required this.window,
     required this.l10n,
-    required this.color,
   });
 
   final QuotaWindow window;
   final L10n l10n;
-  final Color color;
 
   String get _shortLabel => switch (window.label) {
     '5h Rolling' => '5h',
@@ -702,9 +705,10 @@ class _MiniQuota extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final usedColor = window.used >= 90
+    final remaining = window.remaining;
+    final healthColor = remaining < 20
         ? colors.red
-        : (window.used >= 70 ? colors.amber : color);
+        : (remaining < 50 ? colors.amber : colors.green);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -719,11 +723,11 @@ class _MiniQuota extends StatelessWidget {
               ),
             ),
             Text(
-              '${window.remaining.toStringAsFixed(window.remaining % 1 == 0 ? 0 : 1)}%',
+              '${window.used.toStringAsFixed(window.used % 1 == 0 ? 0 : 1)}%',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: usedColor,
+                color: healthColor,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -736,7 +740,7 @@ class _MiniQuota extends StatelessWidget {
             value: (window.used / 100).clamp(0.0, 1.0),
             minHeight: 4,
             backgroundColor: colors.muted,
-            valueColor: AlwaysStoppedAnimation(usedColor),
+            valueColor: AlwaysStoppedAnimation(healthColor),
           ),
         ),
       ],
