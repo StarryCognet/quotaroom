@@ -1,6 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/i18n.dart';
@@ -8,19 +10,20 @@ import '../../core/platform.dart';
 import '../../data/apk_installer.dart';
 import '../../data/update_service.dart';
 import '../../state/app_state.dart';
+import '../prism/app_glyphs.dart';
 import 'confetti.dart';
 
-/// Shows the update announcement. The dialog doubles as a downloader: the
-/// primary action fetches the release APK and then opens Android's installer.
+/// Shows the update announcement in a prism_ui card. The dialog doubles as a
+/// downloader on Android and as a release link on desktop.
 Future<void> showUpdateDialog(
   BuildContext context, {
   required AppState state,
   required UpdateInfo info,
 }) {
-  return showDialog<void>(
+  return showFloatingDialog<void>(
     context: context,
-    barrierDismissible: false,
-    builder: (_) => _UpdateDialog(state: state, info: info),
+    dismissible: false,
+    child: _UpdateDialog(state: state, info: info),
   );
 }
 
@@ -175,7 +178,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = widget.state.l10n;
-    final colors = Theme.of(context).colorScheme;
+    final scheme = context.colorScheme;
     final info = widget.info;
     final notes = info.notes.isEmpty ? l10n.t('updateNotesEmpty') : info.notes;
     final sizeLabel = _sizeBytes > 0
@@ -185,152 +188,157 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         : null;
     return PopScope(
       canPop: !_busy,
-      child: Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 36),
-        backgroundColor: colors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Stack(
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _Header(
-                    latest: info.latest,
-                    current: info.current,
-                    sizeLabel: sizeLabel,
-                    title: l10n.t('updateFound'),
-                    currentLabel: l10n.t('currentVersion'),
-                  ),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            l10n.t('updateAvailableBody'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.5,
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                          if (!_canInstall &&
-                              isWindows &&
-                              info.hasWindowsPackage) ...[
-                            const SizedBox(height: 8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppCorner.xl),
+          child: Container(
+            decoration: ShapeDecoration(
+              color: scheme.surface,
+              shape: AppShape.all(AppCorner.xl),
+            ),
+            child: Stack(
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _Header(
+                      latest: info.latest,
+                      current: info.current,
+                      sizeLabel: sizeLabel,
+                      title: l10n.t('updateFound'),
+                      currentLabel: l10n.t('currentVersion'),
+                    ),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              l10n.t('updateWindowsHint'),
-                              style: TextStyle(
-                                fontSize: 11,
-                                height: 1.5,
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          Text(
-                            l10n.t('releaseNotes'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: colors.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 210),
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(11),
-                            decoration: BoxDecoration(
-                              color: colors.surfaceContainerHighest.withValues(
-                                alpha: 0.55,
-                              ),
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                            child: SingleChildScrollView(
-                              child: Text(
-                                notes,
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  height: 1.65,
-                                  color: colors.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_phase == _UpdatePhase.downloading) ...[
-                            const SizedBox(height: 16),
-                            LinearProgressIndicator(
-                              value: _total > 0 ? _progress : null,
-                              minHeight: 7,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            const SizedBox(height: 7),
-                            Row(
-                              children: [
-                                Text(
-                                  l10n.t('updateDownloading', {
-                                    'pct': (_progress * 100).round(),
-                                  }),
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: colors.onSurfaceVariant,
+                              l10n.t('updateAvailableBody'),
+                              style: AppTextStyle.footnote
+                                  .of(context)
+                                  .copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.5,
                                   ),
-                                ),
-                                const Spacer(),
-                                if (_total > 0)
-                                  Text(
-                                    '${_mb(_received)} / ${_mb(_total)}',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: colors.onSurfaceVariant,
+                            ),
+                            if (!_canInstall &&
+                                isWindows &&
+                                info.hasWindowsPackage) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                l10n.t('updateWindowsHint'),
+                                style: AppTextStyle.caption2
+                                    .of(context)
+                                    .copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                      height: 1.5,
                                     ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                          if (_phase == _UpdatePhase.permission) ...[
+                              ),
+                            ],
                             const SizedBox(height: 14),
-                            _PermissionNotice(
-                              title: l10n.t('updatePermissionTitle'),
-                              body: l10n.t('updatePermissionBody'),
-                              colors: colors,
-                            ),
-                          ],
-                          if (_error != null) ...[
-                            const SizedBox(height: 10),
                             Text(
-                              '${l10n.t('updateDownloadFailed')}: $_error',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                height: 1.4,
-                                color: colors.error,
+                              l10n.t('releaseNotes'),
+                              style: AppTextStyle.caption1
+                                  .of(context, emphasized: true)
+                                  .copyWith(color: scheme.onSurface),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 210),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: ShapeDecoration(
+                                color: scheme.surfaceContainerHigh,
+                                shape: AppShape.all(AppCorner.md),
+                              ),
+                              child: SingleChildScrollView(
+                                child: Text(
+                                  notes,
+                                  style: AppTextStyle.caption2
+                                      .of(context)
+                                      .copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                        height: 1.65,
+                                      ),
+                                ),
                               ),
                             ),
+                            if (_phase == _UpdatePhase.downloading) ...[
+                              const SizedBox(height: 16),
+                              LinearProgressIndicator(
+                                value: _total > 0 ? _progress : null,
+                                minHeight: 7,
+                              ),
+                              const SizedBox(height: 7),
+                              Row(
+                                children: [
+                                  Text(
+                                    l10n.t('updateDownloading', {
+                                      'pct': (_progress * 100).round(),
+                                    }),
+                                    style: AppTextStyle.caption2
+                                        .of(context)
+                                        .copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const Spacer(),
+                                  if (_total > 0)
+                                    Text(
+                                      '${_mb(_received)} / ${_mb(_total)}',
+                                      style: AppTextStyle.caption2
+                                          .of(context)
+                                          .copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            if (_phase == _UpdatePhase.permission) ...[
+                              const SizedBox(height: 14),
+                              _PermissionNotice(
+                                title: l10n.t('updatePermissionTitle'),
+                                body: l10n.t('updatePermissionBody'),
+                                scheme: scheme,
+                              ),
+                            ],
+                            if (_error != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                '${l10n.t('updateDownloadFailed')}: $_error',
+                                style: AppTextStyle.caption2
+                                    .of(context)
+                                    .copyWith(color: scheme.error, height: 1.4),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
-                    child: _actions(context, l10n, colors),
-                  ),
-                ],
-              ),
-              if (_showConfetti) const Positioned.fill(child: ConfettiBurst()),
-            ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                      child: _actions(context, l10n),
+                    ),
+                  ],
+                ),
+                if (_showConfetti)
+                  const Positioned.fill(child: ConfettiBurst()),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _actions(BuildContext context, L10n l10n, ColorScheme colors) {
+  Widget _actions(BuildContext context, L10n l10n) {
     if (_phase == _UpdatePhase.downloading) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -389,10 +397,8 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         const Spacer(),
         FilledButton.icon(
           onPressed: _primaryAction,
-          icon: Icon(
-            _canInstall
-                ? Icons.file_download_outlined
-                : Icons.open_in_new_rounded,
+          icon: GlyphIcon(
+            _canInstall ? AppGlyphs.cloudDownload : AppGlyphs.openExternal,
             size: 17,
           ),
           label: Text(_canInstall ? l10n.t('updateNow') : l10n.t('goDownload')),
@@ -438,13 +444,15 @@ class _Header extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
+              color: const Color(0xFFFFFFFF).withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.system_update_alt_rounded,
-              color: Colors.white,
-              size: 25,
+            child: const Center(
+              child: GlyphIcon(
+                AppGlyphs.cloudDownload,
+                color: Color(0xFFFFFFFF),
+                size: 25,
+              ),
             ),
           ),
           const SizedBox(width: 13),
@@ -454,23 +462,21 @@ class _Header extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.3,
-                  ),
+                  style: AppTextStyle.title2
+                      .of(context, emphasized: true)
+                      .copyWith(color: const Color(0xFFFFFFFF)),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   '$latest · $currentLabel $current'
                   '${sizeLabel == null ? '' : ' · $sizeLabel'}',
                   maxLines: 2,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1.4,
-                    color: Colors.white.withValues(alpha: 0.82),
-                  ),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(
+                        color: const Color(0xFFFFFFFF).withValues(alpha: 0.82),
+                        height: 1.4,
+                      ),
                 ),
               ],
             ),
@@ -485,25 +491,25 @@ class _PermissionNotice extends StatelessWidget {
   const _PermissionNotice({
     required this.title,
     required this.body,
-    required this.colors,
+    required this.scheme,
   });
 
   final String title;
   final String body;
-  final ColorScheme colors;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: colors.tertiaryContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.all(12),
+      decoration: ShapeDecoration(
+        color: scheme.tertiaryContainer.withValues(alpha: 0.55),
+        shape: AppShape.all(AppCorner.md),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded, size: 17, color: colors.tertiary),
+          GlyphIcon(AppGlyphs.info, size: 17, color: scheme.tertiary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -511,20 +517,16 @@ class _PermissionNotice extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: colors.onSurface,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   body,
-                  style: TextStyle(
-                    fontSize: 10,
-                    height: 1.5,
-                    color: colors.onSurfaceVariant,
-                  ),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant, height: 1.5),
                 ),
               ],
             ),

@@ -1,13 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
-import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
+import '../prism/app_glyphs.dart';
+import '../prism/keep_alive_page.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
 import '../widgets/skeleton.dart';
@@ -28,83 +31,62 @@ class RecordsPage extends StatefulWidget {
 
 class _RecordsPageState extends State<RecordsPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+  late final TabController _tabsController;
+  int _lastIndex = 0;
   final ValueNotifier<KeyFilterSelection?> _keyFilter = ValueNotifier(null);
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabsController = TabController(length: 3, vsync: this);
+    _tabsController.addListener(_onTabsChanged);
+  }
+
+  void _onTabsChanged() {
+    if (!mounted || _tabsController.index == _lastIndex) return;
+    _lastIndex = _tabsController.index;
+    setState(() {});
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
+    _tabsController.dispose();
     _keyFilter.dispose();
     super.dispose();
   }
 
   void _selectKey(String keyId, String keyName) {
     _keyFilter.value = KeyFilterSelection(keyId: keyId, keyName: keyName);
-    _tabs.animateTo(1);
+    _tabsController.animateTo(1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final l10n = state.l10n;
-    final colors = context.colors;
+    final l10n = context.watch<AppState>().l10n;
+    final index = _tabsController.index;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-          child: Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: colors.muted,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: TabBar(
-              controller: _tabs,
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                color: colors.card,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 4,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-              labelColor: colors.primary,
-              unselectedLabelColor: colors.text3,
-              labelStyle: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              ),
-              tabs: [
-                Tab(height: 36, text: l10n.t('sessionUsage')),
-                Tab(height: 36, text: l10n.t('usageRecords')),
-                Tab(height: 36, text: l10n.t('keyUsage')),
-              ],
-            ),
+          padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 8),
+          child: SegmentedControl<int>(
+            segments: [
+              (0, l10n.t('sessionUsage')),
+              (1, l10n.t('usageRecords')),
+              (2, l10n.t('keyUsage')),
+            ],
+            value: index,
+            onChanged: (value) => _tabsController.animateTo(value),
           ),
         ),
         Expanded(
           child: TabBarView(
-            controller: _tabs,
+            controller: _tabsController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              const _SessionsTab(),
-              _RecordsTab(keyFilter: _keyFilter),
-              _KeyTab(onSelectKey: _selectKey),
+              const KeepAlivePage(child: _SessionsTab()),
+              KeepAlivePage(child: _RecordsTab(keyFilter: _keyFilter)),
+              KeepAlivePage(child: _KeyTab(onSelectKey: _selectKey)),
             ],
           ),
         ),
@@ -130,16 +112,12 @@ class _InfiniteFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     if (loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 14),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+          child: ActivityIndicator(size: 18, color: scheme.primary),
         ),
       );
     }
@@ -147,17 +125,7 @@ class _InfiniteFooter extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Center(
-          child: TextButton(
-            onPressed: onRetry,
-            style: TextButton.styleFrom(
-              minimumSize: const Size(0, 32),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-            ),
-            child: Text(
-              l10n.t('retry'),
-              style: const TextStyle(fontSize: 11.5),
-            ),
-          ),
+          child: TextButton(onPressed: onRetry, child: Text(l10n.t('retry'))),
         ),
       );
     }
@@ -167,7 +135,9 @@ class _InfiniteFooter extends StatelessWidget {
         child: Center(
           child: Text(
             l10n.t('allLoaded'),
-            style: TextStyle(fontSize: 10.5, color: colors.text3),
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
       );
@@ -319,7 +289,6 @@ class _SessionsTabState extends State<_SessionsTab> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
-    final colors = context.colors;
     if (_loading && _items.isEmpty) {
       return const ListSkeleton();
     }
@@ -331,19 +300,20 @@ class _SessionsTabState extends State<_SessionsTab> {
       );
     }
     if (_items.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            const SizedBox(height: 50),
-            EmptyState(
-              icon: Icons.forum_outlined,
-              title: l10n.t('emptySessions'),
-              subtitle: l10n.t('syncHint'),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, 30, 16, 24 + context.bottomInset),
+        children: [
+          EmptyState(
+            glyph: AppGlyphs.requests,
+            title: l10n.t('emptySessions'),
+            subtitle: l10n.t('syncHint'),
+            action: FilledButton(
+              onPressed: _refresh,
+              child: Text(l10n.t('refresh')),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
     return Column(
@@ -354,37 +324,36 @@ class _SessionsTabState extends State<_SessionsTab> {
             alignment: Alignment.centerLeft,
             child: Text(
               l10n.t('sessionsTotal', {'n': fmtInt(_total)}),
-              style: TextStyle(fontSize: 11, color: colors.text3),
+              style: AppTextStyle.caption2
+                  .of(context)
+                  .copyWith(color: context.colorScheme.onSurfaceVariant),
             ),
           ),
         ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.separated(
-              controller: _scroll,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              itemCount: _items.length + 1,
-              separatorBuilder: (context, index) => const SizedBox(height: 7),
-              itemBuilder: (context, index) {
-                if (index == _items.length) {
-                  return _InfiniteFooter(
-                    loading: _loadingMore,
-                    error: _error,
-                    hasMore: _items.length < _total,
-                    onRetry: _retry,
-                    l10n: l10n,
-                  );
-                }
-                final session = _items[index];
-                return _SessionCard(
-                  session: session,
-                  keyName: state.keyNames[session.keyId] ?? '',
-                  state: state,
+          child: ListView.separated(
+            controller: _scroll,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 12 + context.bottomInset),
+            itemCount: _items.length + 1,
+            separatorBuilder: (context, index) => const SizedBox(height: 7),
+            itemBuilder: (context, index) {
+              if (index == _items.length) {
+                return _InfiniteFooter(
+                  loading: _loadingMore,
+                  error: _error,
+                  hasMore: _items.length < _total,
+                  onRetry: _retry,
+                  l10n: l10n,
                 );
-              },
-            ),
+              }
+              final session = _items[index];
+              return _SessionCard(
+                session: session,
+                keyName: state.keyNames[session.keyId] ?? '',
+                state: state,
+              );
+            },
           ),
         ),
       ],
@@ -405,7 +374,7 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final keyLabel = session.keyId.isEmpty
         ? l10n.t('unassigned')
@@ -422,54 +391,57 @@ class _SessionCard extends StatelessWidget {
       dayAgo: l10n.t('dayAgo'),
     );
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 110),
+                constraints: const BoxConstraints(maxWidth: 120),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2.5,
+                    horizontal: 7,
+                    vertical: 3,
                   ),
-                  decoration: BoxDecoration(
-                    color: colors.primarySoft,
-                    borderRadius: BorderRadius.circular(6),
+                  decoration: ShapeDecoration(
+                    color: scheme.primaryContainer,
+                    shape: AppShape.all(AppCorner.xs),
                   ),
                   child: Text(
                     keyLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w600,
-                      color: colors.primary,
-                    ),
+                    style: AppTextStyle.caption2
+                        .of(context, emphasized: true)
+                        .copyWith(color: scheme.primary),
                   ),
                 ),
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   sessionLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(
+                        color: scheme.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                 ),
               ),
               const SizedBox(width: 6),
-              Text(last, style: TextStyle(fontSize: 10, color: colors.text3)),
+              Text(
+                last,
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
+              ),
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 5,
             runSpacing: 5,
@@ -501,7 +473,7 @@ class _SessionCard extends StatelessWidget {
                   currency: state.currency,
                   rate: state.usdCny,
                 ),
-                highlight: colors.amber,
+                highlight: const Color(0xFFD97706),
               ),
             ],
           ),
@@ -580,8 +552,6 @@ class _RecordsTabState extends State<_RecordsTab> {
     final accountChanged = id != _accountId;
     final syncChanged = syncAt != null && syncAt != _lastSyncAt;
     if (accountChanged) {
-      // The first build may already carry a key drill-down selected from the
-      // Key tab. Only a real account switch should clear it.
       final firstBuild = _accountId == null;
       _accountId = id;
       _lastSyncAt = syncAt;
@@ -744,49 +714,11 @@ class _RecordsTabState extends State<_RecordsTab> {
 
   Future<void> _pickModel() async {
     final l10n = context.read<AppState>().l10n;
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showFormSheet<String>(
       context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final colors = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.sizeOf(sheetContext).height * 0.6,
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              children: [
-                ListTile(
-                  title: Text(
-                    l10n.t('allModels'),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.onSurface,
-                    ),
-                  ),
-                  trailing: _model.isEmpty
-                      ? Icon(Icons.check_rounded, color: colors.primary)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(''),
-                ),
-                const Divider(height: 1),
-                for (final model in _models)
-                  ListTile(
-                    leading: ModelIcon(model: model, size: 20),
-                    title: Text(
-                      model,
-                      style: TextStyle(fontSize: 13, color: colors.onSurface),
-                    ),
-                    trailing: _model == model
-                        ? Icon(Icons.check_rounded, color: colors.primary)
-                        : null,
-                    onTap: () => Navigator.of(sheetContext).pop(model),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+      props: const SheetProps(detents: [0.5, 0.85]),
+      builder: (sheetContext) =>
+          _ModelPicker(models: _models, selected: _model, l10n: l10n),
     );
     if (selected == null || !mounted) return;
     setState(() {
@@ -802,7 +734,7 @@ class _RecordsTabState extends State<_RecordsTab> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     if (_loading && _items.isEmpty) {
       return const ListSkeleton();
     }
@@ -820,21 +752,16 @@ class _RecordsTabState extends State<_RecordsTab> {
           child: TextField(
             controller: _search,
             onChanged: _onSearchChanged,
-            style: const TextStyle(fontSize: 12.5),
             decoration: InputDecoration(
               hintText: l10n.t('searchHint'),
-              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              prefixIcon: const GlyphIcon(AppGlyphs.search, size: 18),
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 17),
+                      icon: const GlyphIcon(AppGlyphs.clearField, size: 17),
                       onPressed: _clearSearch,
                     ),
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 10,
-              ),
             ),
           ),
         ),
@@ -845,25 +772,20 @@ class _RecordsTabState extends State<_RecordsTab> {
               Expanded(
                 child: Text(
                   l10n.t('recordsTotal', {'n': fmtInt(_total)}),
-                  style: TextStyle(fontSize: 11, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 180),
+                constraints: const BoxConstraints(maxWidth: 190),
                 child: OutlinedButton.icon(
                   onPressed: _pickModel,
-                  icon: const Icon(Icons.filter_list_rounded, size: 15),
+                  icon: const GlyphIcon(AppGlyphs.filter, size: 15),
                   label: Text(
                     _model.isEmpty ? l10n.t('allModels') : _model,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 7,
-                    ),
-                    textStyle: const TextStyle(fontSize: 11.5),
                   ),
                 ),
               ),
@@ -891,18 +813,10 @@ class _RecordsTabState extends State<_RecordsTab> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: InputChip(
-                visualDensity: VisualDensity.compact,
-                label: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 230),
-                  child: Text(
-                    _selectedKey!.keyName.isEmpty
-                        ? l10n.t('unassigned')
-                        : _selectedKey!.keyName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              child: Chip(
+                label: _selectedKey!.keyName.isEmpty
+                    ? l10n.t('unassigned')
+                    : _selectedKey!.keyName,
                 onDeleted: _clearKeyFilter,
               ),
             ),
@@ -914,19 +828,25 @@ class _RecordsTabState extends State<_RecordsTab> {
         children: [
           header,
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  const SizedBox(height: 30),
-                  EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    title: l10n.t('emptyRecords'),
-                    subtitle: l10n.t('syncHint'),
-                  ),
-                ],
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                24,
+                16,
+                24 + context.bottomInset,
               ),
+              children: [
+                EmptyState(
+                  glyph: AppGlyphs.requests,
+                  title: l10n.t('emptyRecords'),
+                  subtitle: l10n.t('syncHint'),
+                  action: FilledButton(
+                    onPressed: _refresh,
+                    child: Text(l10n.t('refresh')),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -936,35 +856,129 @@ class _RecordsTabState extends State<_RecordsTab> {
       children: [
         header,
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.separated(
-              controller: _scroll,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              itemCount: _items.length + 1,
-              separatorBuilder: (context, index) => const SizedBox(height: 7),
-              itemBuilder: (context, index) {
-                if (index == _items.length) {
-                  return _InfiniteFooter(
-                    loading: _loadingMore,
-                    error: _error,
-                    hasMore: _items.length < _total,
-                    onRetry: _retry,
-                    l10n: l10n,
-                  );
-                }
-                final record = _items[index];
-                return _RecordCard(
-                  record: record,
-                  state: state,
-                  keyName: state.keyNames[record.keyId] ?? '',
+          child: ListView.separated(
+            controller: _scroll,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + context.bottomInset),
+            itemCount: _items.length + 1,
+            separatorBuilder: (context, index) => const SizedBox(height: 7),
+            itemBuilder: (context, index) {
+              if (index == _items.length) {
+                return _InfiniteFooter(
+                  loading: _loadingMore,
+                  error: _error,
+                  hasMore: _items.length < _total,
+                  onRetry: _retry,
+                  l10n: l10n,
                 );
-              },
-            ),
+              }
+              final record = _items[index];
+              return _RecordCard(
+                record: record,
+                state: state,
+                keyName: state.keyNames[record.keyId] ?? '',
+              );
+            },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ModelPicker extends StatelessWidget {
+  const _ModelPicker({
+    required this.models,
+    required this.selected,
+    required this.l10n,
+  });
+
+  final List<String> models;
+  final String selected;
+  final L10n l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.t('modelFilter'),
+            style: AppTextStyle.title2
+                .of(context, emphasized: true)
+                .copyWith(color: scheme.onSurface),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView(
+              children: [
+                _ModelRow(
+                  label: l10n.t('allModels'),
+                  selected: selected.isEmpty,
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+                if (models.isNotEmpty) const Divider(height: 1, thickness: 1),
+                for (final model in models)
+                  _ModelRow(
+                    label: model,
+                    model: model,
+                    selected: selected == model,
+                    onTap: () => Navigator.of(context).pop(model),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModelRow extends StatelessWidget {
+  const _ModelRow({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.model,
+  });
+
+  final String label;
+  final String? model;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    return PressSurface(
+      fill: const Color(0x00000000),
+      shape: AppShape.all(0),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      onPressed: onTap,
+      child: Row(
+        children: [
+          if (model != null) ...[
+            ModelIcon(model: model!, size: 20),
+            const SizedBox(width: 10),
+          ] else
+            const SizedBox(width: 30),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyle.footnote
+                  .of(context, emphasized: selected)
+                  .copyWith(color: scheme.onSurface),
+            ),
+          ),
+          if (selected)
+            GlyphIcon(AppGlyphs.check, size: 18, color: scheme.primary),
+        ],
+      ),
     );
   }
 }
@@ -982,31 +996,29 @@ class _RecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final plan = planBadge(record.plan);
     final keyLabel = record.keyId.isEmpty
         ? l10n.t('unassigned')
         : (keyName.isNotEmpty ? keyName : truncateMiddle(record.keyId, 16));
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               ModelIcon(model: record.model, size: 16),
-              const SizedBox(width: 6),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
                   record.model.isEmpty ? '—' : record.model,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
                 ),
               ),
               if (plan.isNotEmpty) ...[
@@ -1016,28 +1028,27 @@ class _RecordCard extends StatelessWidget {
                     horizontal: 5,
                     vertical: 1.5,
                   ),
-                  decoration: BoxDecoration(
-                    color: colors.muted,
-                    borderRadius: BorderRadius.circular(4),
+                  decoration: ShapeDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    shape: AppShape.all(AppCorner.xs),
                   ),
                   child: Text(
                     plan,
-                    style: TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w700,
-                      color: colors.text3,
-                    ),
+                    style: AppTextStyle.caption2
+                        .of(context, emphasized: true)
+                        .copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
               ],
               const SizedBox(width: 6),
               Text(
                 fmtDateTimeShort(record.createdAt),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: colors.text3,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
               ),
             ],
           ),
@@ -1049,7 +1060,9 @@ class _RecordCard extends StatelessWidget {
                   keyLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1059,16 +1072,16 @@ class _RecordCard extends StatelessWidget {
                   currency: state.currency,
                   rate: state.usdCny,
                 ),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: colors.amber,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+                style: AppTextStyle.caption1
+                    .of(context, emphasized: true)
+                    .copyWith(
+                      color: const Color(0xFFD97706),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
               ),
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 5,
             runSpacing: 5,
@@ -1188,7 +1201,7 @@ class _KeyTabState extends State<_KeyTab> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     if (_loading && _stats.isEmpty) {
       return const ListSkeleton(rows: 3, rowHeight: 190);
     }
@@ -1200,59 +1213,61 @@ class _KeyTabState extends State<_KeyTab> {
       );
     }
     if (_stats.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            const SizedBox(height: 50),
-            EmptyState(
-              icon: Icons.key_outlined,
-              title: l10n.t('noData'),
-              subtitle: l10n.t('syncHint'),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, 30, 16, 24 + context.bottomInset),
+        children: [
+          EmptyState(
+            glyph: AppGlyphs.key,
+            title: l10n.t('noData'),
+            subtitle: l10n.t('syncHint'),
+            action: FilledButton(
+              onPressed: _refresh,
+              child: Text(l10n.t('refresh')),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
     final totalTokens = _stats.fold<int>(
       0,
       (sum, stat) => sum + stat.totalTokens,
     );
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.t('keysTotal', {'n': _stats.length}),
-                  style: TextStyle(fontSize: 11, color: colors.text3),
-                ),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(16, 2, 16, 16 + context.bottomInset),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.t('keysTotal', {'n': _stats.length}),
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
-              Text(
-                l10n.t('keyUsageDesc'),
-                style: TextStyle(fontSize: 10, color: colors.text3),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          for (var i = 0; i < _stats.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8),
-            _KeyCard(
-              stat: _stats[i],
-              index: i,
-              totalTokens: totalTokens,
-              trend: _trends[_stats[i].keyId] ?? const [],
-              state: state,
-              onSelectKey: widget.onSelectKey,
+            ),
+            Text(
+              l10n.t('keyUsageDesc'),
+              style: AppTextStyle.caption2
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
+        ),
+        const SizedBox(height: 6),
+        for (var i = 0; i < _stats.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _KeyCard(
+            stat: _stats[i],
+            index: i,
+            totalTokens: totalTokens,
+            trend: _trends[_stats[i].keyId] ?? const [],
+            state: state,
+            onSelectKey: widget.onSelectKey,
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -1285,7 +1300,7 @@ class _KeyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final color = _palette[index % _palette.length];
     final rawName = state.keyNames[stat.keyId] ?? '';
@@ -1306,135 +1321,164 @@ class _KeyCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => onSelectKey(stat.keyId, keyName),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 9,
-                    height: 9,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
+      child: PressSurface(
+        fill: const Color(0x00000000),
+        shape: AppShape.all(0),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        onPressed: () => onSelectKey(stat.keyId, keyName),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      keyName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: colors.text,
-                      ),
-                    ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    keyName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.subheadline
+                        .of(context, emphasized: true)
+                        .copyWith(color: scheme.onSurface),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    fmtMoney(
-                      stat.totalCostUsd,
-                      currency: state.currency,
-                      rate: state.usdCny,
-                    ),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors.amber,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: colors.text3,
-                  ),
-                ],
-              ),
-              if (showId) ...[
-                const SizedBox(height: 2),
+                ),
+                const SizedBox(width: 8),
                 Text(
-                  displayId,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 9.5, color: colors.text3),
+                  fmtMoney(
+                    stat.totalCostUsd,
+                    currency: state.currency,
+                    rate: state.usdCny,
+                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(
+                        color: const Color(0xFFD97706),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                ),
+                const SizedBox(width: 2),
+                GlyphIcon(
+                  AppGlyphs.chevronForward,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(99),
-                child: LinearProgressIndicator(
-                  value: share.clamp(0.0, 1.0),
-                  minHeight: 4,
-                  backgroundColor: colors.muted,
-                  valueColor: AlwaysStoppedAnimation(color),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    '${(share * 100).toStringAsFixed(1)}%',
-                    style: TextStyle(fontSize: 10, color: colors.text3),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${l10n.t('colLastUsed')} $last',
-                    style: TextStyle(fontSize: 10, color: colors.text3),
-                  ),
-                ],
-              ),
-              if (trend.isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Sparkline(values: trend, color: color, height: 24),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 5,
-                runSpacing: 5,
-                children: [
-                  StatChip(
-                    label: l10n.t('requests'),
-                    value: fmtInt(stat.requestCount),
-                  ),
-                  StatChip(
-                    label: l10n.t('totalTokensShort'),
-                    value: fmtTokens(stat.totalTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('input'),
-                    value: fmtTokens(stat.totalInputTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('output'),
-                    value: fmtTokens(stat.totalOutputTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('colReasoning'),
-                    value: fmtTokens(stat.totalReasoningTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('cacheReadTokens'),
-                    value: fmtTokens(stat.cacheHitTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('cacheWriteTokens'),
-                    value: fmtTokens(stat.cacheWriteTokens),
-                  ),
-                  StatChip(
-                    label: l10n.t('sessions'),
-                    value: fmtInt(stat.sessionCount),
-                  ),
-                ],
+            ),
+            if (showId) ...[
+              const SizedBox(height: 2),
+              Text(
+                displayId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
+            const SizedBox(height: 8),
+            _ShareBar(value: share, color: color),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(
+                  '${(share * 100).toStringAsFixed(1)}%',
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const Spacer(),
+                Text(
+                  '${l10n.t('colLastUsed')} $last',
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+            if (trend.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Sparkline(values: trend, color: color, height: 24),
+            ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                StatChip(
+                  label: l10n.t('requests'),
+                  value: fmtInt(stat.requestCount),
+                ),
+                StatChip(
+                  label: l10n.t('totalTokensShort'),
+                  value: fmtTokens(stat.totalTokens),
+                ),
+                StatChip(
+                  label: l10n.t('input'),
+                  value: fmtTokens(stat.totalInputTokens),
+                ),
+                StatChip(
+                  label: l10n.t('output'),
+                  value: fmtTokens(stat.totalOutputTokens),
+                ),
+                StatChip(
+                  label: l10n.t('colReasoning'),
+                  value: fmtTokens(stat.totalReasoningTokens),
+                ),
+                StatChip(
+                  label: l10n.t('cacheReadTokens'),
+                  value: fmtTokens(stat.cacheHitTokens),
+                ),
+                StatChip(
+                  label: l10n.t('cacheWriteTokens'),
+                  value: fmtTokens(stat.cacheWriteTokens),
+                ),
+                StatChip(
+                  label: l10n.t('sessions'),
+                  value: fmtInt(stat.sessionCount),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShareBar extends StatelessWidget {
+  const _ShareBar({required this.value, required this.color});
+
+  final double value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 4,
+      decoration: ShapeDecoration(
+        color: context.colorScheme.outlineVariant.withValues(alpha: 0.35),
+        shape: AppShape.full,
+      ),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, _) => Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FractionallySizedBox(
+            widthFactor: progress,
+            child: DecoratedBox(
+              decoration: ShapeDecoration(color: color, shape: AppShape.full),
+              child: const SizedBox(height: 4),
+            ),
           ),
         ),
       ),

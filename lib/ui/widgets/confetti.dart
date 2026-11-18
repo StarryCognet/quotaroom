@@ -1,6 +1,7 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/prism_ui.dart';
 
 /// A short, dependency-free confetti burst used by update dialogs.
 class ConfettiBurst extends StatefulWidget {
@@ -42,7 +43,7 @@ class _ConfettiBurstState extends State<ConfettiBurst>
                 progress: _controller.value,
                 count: widget.count,
                 colors: [
-                  Theme.of(context).colorScheme.primary,
+                  context.colorScheme.primary,
                   const Color(0xFFFFB74D),
                   const Color(0xFF4CD964),
                   const Color(0xFF4A9EFF),

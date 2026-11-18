@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/prism_ui.dart';
 
-import '../../core/theme.dart';
-
-/// A lightweight, dependency-free shimmer used while local aggregates load.
-/// It mirrors the real card rhythm instead of showing a blank spinner.
+/// A lightweight shimmer used while local aggregates load. It mirrors the real
+/// card rhythm instead of showing a blank spinner.
 class SkeletonPulse extends StatefulWidget {
   const SkeletonPulse({super.key, required this.child});
 
@@ -55,9 +54,9 @@ class SkeletonBox extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      decoration: BoxDecoration(
-        color: context.colors.muted,
-        borderRadius: BorderRadius.circular(radius),
+      decoration: ShapeDecoration(
+        color: context.colorScheme.surfaceContainerHigh,
+        shape: AppShape.all(radius),
       ),
     );
   }
@@ -68,27 +67,26 @@ class DashboardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return SkeletonPulse(
       child: ListView(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
         children: [
           Row(
             children: [
               for (var i = 0; i < 4; i++) ...[
                 if (i > 0) const SizedBox(width: 8),
-                const SkeletonBox(width: 58, height: 34, radius: 9),
+                const SkeletonBox(width: 58, height: 34, radius: 99),
               ],
             ],
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            decoration: BoxDecoration(
-              color: colors.card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.border),
+            padding: const EdgeInsets.all(16),
+            decoration: ShapeDecoration(
+              color: scheme.surfaceContainerLow,
+              shape: AppShape.all(AppCorner.lg),
             ),
             child: Column(
               children: [
@@ -126,14 +124,14 @@ class DashboardSkeleton extends StatelessWidget {
             crossAxisSpacing: 10,
             childAspectRatio: 1.65,
             children: const [
-              SkeletonBox(height: 90, radius: 14),
-              SkeletonBox(height: 90, radius: 14),
-              SkeletonBox(height: 90, radius: 14),
-              SkeletonBox(height: 90, radius: 14),
+              SkeletonBox(height: 90, radius: AppCorner.lg),
+              SkeletonBox(height: 90, radius: AppCorner.lg),
+              SkeletonBox(height: 90, radius: AppCorner.lg),
+              SkeletonBox(height: 90, radius: AppCorner.lg),
             ],
           ),
           const SizedBox(height: 18),
-          const SkeletonBox(height: 210, radius: 16),
+          const SkeletonBox(height: 210, radius: AppCorner.lg),
         ],
       ),
     );
@@ -148,20 +146,20 @@ class ListSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
     return SkeletonPulse(
       child: ListView.separated(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
         itemCount: rows,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           return Container(
             height: rowHeight,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: context.colors.card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.colors.border),
+            padding: const EdgeInsets.all(15),
+            decoration: ShapeDecoration(
+              color: scheme.surfaceContainerLow,
+              shape: AppShape.all(AppCorner.lg),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +178,9 @@ class ListSkeleton extends StatelessWidget {
                   children: [
                     for (var i = 0; i < 3; i++) ...[
                       if (i > 0) const SizedBox(width: 7),
-                      const Expanded(child: SkeletonBox(height: 20, radius: 6)),
+                      const Expanded(
+                        child: SkeletonBox(height: 20, radius: AppCorner.xs),
+                      ),
                     ],
                   ],
                 ),

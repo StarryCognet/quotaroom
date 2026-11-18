@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/platform.dart';
-import '../../core/theme.dart';
 import '../../state/app_state.dart';
+import '../prism/app_glyphs.dart';
+import '../prism/prism_route.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/common.dart';
 import 'licenses_page.dart';
@@ -22,29 +25,43 @@ class AboutPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
-    final colors = context.colors;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('aboutTitle'))),
+    final scheme = context.colorScheme;
+    return PrismScaffold(
+      bar: ScaffoldBar(
+        isCompact: false,
+        listenable: const AlwaysStoppedAnimation<double>(0),
+        loading: const AlwaysStoppedAnimation<bool>(false),
+        builder: (context) => ColoredBox(
+          color: SurfaceLevel.page.colorOf(context.colorScheme),
+          child: AppBar(
+            leading: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const GlyphIcon(AppGlyphs.chevronBack),
+              tooltip: l10n.t('back'),
+            ),
+            title: Text(l10n.t('aboutTitle')),
+          ),
+        ),
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
         children: [
-          Center(child: AppLogo(size: 68)),
+          const Center(child: AppLogo(size: 68)),
           const SizedBox(height: 12),
           Text(
             'QuotaRoom',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: colors.text,
-              letterSpacing: -0.3,
-            ),
+            style: AppTextStyle.title2
+                .of(context, emphasized: true)
+                .copyWith(color: scheme.onSurface, letterSpacing: -0.3),
           ),
           const SizedBox(height: 3),
           Text(
             l10n.t('slogan'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11.5, color: colors.text3),
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 5),
           FutureBuilder<PackageInfo>(
@@ -56,7 +73,9 @@ class AboutPage extends StatelessWidget {
               return Text(
                 '${l10n.t('version')} $version · $platformLabel',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11.5, color: colors.text3),
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
               );
             },
           ),
@@ -64,11 +83,9 @@ class AboutPage extends StatelessWidget {
           AppCard(
             child: Text(
               l10n.t('introText'),
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.75,
-                color: colors.text2,
-              ),
+              style: AppTextStyle.footnote
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant, height: 1.75),
             ),
           ),
           const SizedBox(height: 12),
@@ -94,20 +111,21 @@ class AboutPage extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.check_circle_rounded,
+                        GlyphIcon(
+                          AppGlyphs.checkCircle,
                           size: 15,
-                          color: colors.primary,
+                          color: scheme.primary,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             l10n.t(key),
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.5,
-                              color: colors.text2,
-                            ),
+                            style: AppTextStyle.footnote
+                                .of(context)
+                                .copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  height: 1.5,
+                                ),
                           ),
                         ),
                       ],
@@ -130,8 +148,9 @@ class AboutPage extends StatelessWidget {
                     for (final tech in const [
                       'Flutter',
                       'Dart',
+                      'prism_ui',
                       'SQLite',
-                      'fl_chart',
+                      'Prism charts',
                       'WebView',
                       'WorkManager',
                       'home_widget',
@@ -142,13 +161,15 @@ class AboutPage extends StatelessWidget {
                           horizontal: 10,
                           vertical: 4,
                         ),
-                        decoration: BoxDecoration(
-                          color: colors.muted,
-                          borderRadius: BorderRadius.circular(99),
+                        decoration: ShapeDecoration(
+                          color: scheme.surfaceContainerHigh,
+                          shape: AppShape.full,
                         ),
                         child: Text(
                           tech,
-                          style: TextStyle(fontSize: 10.5, color: colors.text2),
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ),
                   ],
@@ -162,39 +183,39 @@ class AboutPage extends StatelessWidget {
             child: Column(
               children: [
                 _LinkRow(
-                  icon: Icons.home_outlined,
+                  glyph: AppGlyphs.dashboard,
                   label: l10n.t('projectHome'),
                   value: 'github.com/StarryCognet/quotaroom',
                   onTap: () => _open(context, _projectUrl),
                 ),
-                Divider(height: 1, color: colors.border),
+                const Divider(height: 1, thickness: 1),
                 _LinkRow(
-                  icon: Icons.bug_report_outlined,
+                  glyph: AppGlyphs.warning,
                   label: l10n.t('feedback'),
                   value: 'github.com/StarryCognet/quotaroom/issues',
                   onTap: () => _open(context, _issuesUrl),
                 ),
-                Divider(height: 1, color: colors.border),
+                const Divider(height: 1, thickness: 1),
                 _LinkRow(
-                  icon: Icons.code_rounded,
+                  glyph: AppGlyphs.code,
                   label: l10n.t('upstream'),
                   value: 'github.com/yphyphyph/opencode-go-gauge',
                   onTap: () => _open(context, _upstreamUrl),
                 ),
-                Divider(height: 1, color: colors.border),
+                const Divider(height: 1, thickness: 1),
                 _LinkRow(
-                  icon: Icons.public_rounded,
+                  glyph: AppGlyphs.openExternal,
                   label: l10n.t('thanksText'),
                   value: 'opencode.ai',
                   onTap: () => _open(context, _openCodeUrl),
                 ),
-                Divider(height: 1, color: colors.border),
+                const Divider(height: 1, thickness: 1),
                 _LinkRow(
-                  icon: Icons.gavel_rounded,
+                  glyph: AppGlyphs.gavel,
                   label: l10n.t('openSourceLicenses'),
-                  value: 'MIT · GoGauge upstream',
+                  value: 'GPL-3.0 · MIT upstream',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
+                    prismPageRoute<void>(
                       builder: (_) => const OpenSourceLicensesPage(),
                     ),
                   ),
@@ -211,16 +232,20 @@ class AboutPage extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   l10n.t('thanksText'),
-                  style: TextStyle(fontSize: 12, color: colors.text2),
+                  style: AppTextStyle.footnote
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
           Text(
-            l10n.t('pageFoot', {'version': '2.1.1'}),
+            l10n.t('pageFoot', {'version': '2.3.0'}),
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 10.5, color: colors.text3),
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -235,64 +260,68 @@ class AboutPage extends StatelessWidget {
         mode: LaunchMode.externalApplication,
       );
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.t('loadFailed'))));
+        BannerHost.maybeOf(context)
+            ?.show(l10n.t('loadFailed'), level: BannerLevel.error);
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.t('loadFailed')}: $e')));
+      BannerHost.maybeOf(context)
+          ?.show('${l10n.t('loadFailed')}: $e', level: BannerLevel.error);
     }
   }
 }
 
 class _LinkRow extends StatelessWidget {
   const _LinkRow({
-    required this.icon,
+    required this.glyph,
     required this.label,
     required this.value,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Glyph glyph;
   final String label;
   final String value;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: colors.primary),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: colors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: TextStyle(fontSize: 10.5, color: colors.text3),
-                  ),
-                ],
-              ),
+    final scheme = context.colorScheme;
+    return PressSurface(
+      fill: const Color(0x00000000),
+      shape: AppShape.all(0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      onPressed: onTap,
+      child: Row(
+        children: [
+          GlyphIcon(glyph, size: 18, color: scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
             ),
-            Icon(Icons.open_in_new_rounded, size: 16, color: colors.text3),
-          ],
-        ),
+          ),
+          GlyphIcon(
+            AppGlyphs.openExternal,
+            size: 16,
+            color: scheme.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }

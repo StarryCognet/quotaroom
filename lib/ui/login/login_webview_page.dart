@@ -1,13 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../data/cookie_bridge.dart';
 import '../../data/opencode_api.dart';
 import '../../state/app_state.dart';
-import 'paste_cookie_sheet.dart';
+import '../prism/app_glyphs.dart';
+import '../prism/paste_cookie_sheet.dart';
 
 /// Hosts opencode.ai's console login inside a WebView and captures the
 /// HttpOnly `__Host-console_session` cookie through the native bridge.
@@ -120,30 +123,43 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.watch<AppState>().l10n;
-    final colors = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.t('loginTitle'), style: const TextStyle(fontSize: 16)),
-        actions: [
-          IconButton(
-            tooltip: l10n.t('pasteCookie'),
-            onPressed: _pasteInstead,
-            icon: const Icon(Icons.keyboard_alt_outlined),
+    final scheme = context.colorScheme;
+    return PrismScaffold(
+      bar: ScaffoldBar(
+        isCompact: false,
+        listenable: const AlwaysStoppedAnimation<double>(0),
+        loading: const AlwaysStoppedAnimation<bool>(false),
+        builder: (context) => ColoredBox(
+          color: SurfaceLevel.page.colorOf(context.colorScheme),
+          child: AppBar(
+            leading: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const GlyphIcon(AppGlyphs.chevronBack),
+              tooltip: l10n.t('back'),
+            ),
+            title: Text(l10n.t('loginTitle')),
+            actions: [
+              IconButton(
+                onPressed: _pasteInstead,
+                tooltip: l10n.t('pasteCookie'),
+                icon: const GlyphIcon(AppGlyphs.key, size: 22),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() => _error = null);
+                  _controller.reload();
+                },
+                tooltip: l10n.t('refresh'),
+                icon: const GlyphIcon(AppGlyphs.refresh, size: 22),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: l10n.t('close'),
+                icon: const GlyphIcon(AppGlyphs.close, size: 22),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: l10n.t('refresh'),
-            onPressed: () {
-              setState(() => _error = null);
-              _controller.reload();
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          IconButton(
-            tooltip: l10n.t('close'),
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded),
-          ),
-        ],
+        ),
       ),
       body: Column(
         children: [
@@ -151,35 +167,39 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
             LinearProgressIndicator(
               value: _progress <= 0 ? null : _progress,
               minHeight: 2,
-              backgroundColor: colors.colorScheme.surfaceContainerHighest,
             ),
           Expanded(
             child: Stack(
               children: [
-                WebViewWidget(controller: _controller),
-                if (!_ready) const Center(child: CircularProgressIndicator()),
+                ColoredBox(
+                  color: scheme.surface,
+                  child: WebViewWidget(controller: _controller),
+                ),
+                if (!_ready)
+                  Center(
+                    child: ActivityIndicator(size: 24, color: scheme.primary),
+                  ),
                 if (_error != null)
                   ColoredBox(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color: scheme.surface,
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(28),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.wifi_off_rounded,
+                            GlyphIcon(
+                              AppGlyphs.wifiOff,
                               size: 38,
-                              color: colors.colorScheme.error,
+                              color: scheme.error,
                             ),
                             const SizedBox(height: 12),
                             Text(
                               _error!,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colors.colorScheme.onSurfaceVariant,
-                              ),
+                              style: AppTextStyle.footnote
+                                  .of(context)
+                                  .copyWith(color: scheme.onSurfaceVariant),
                             ),
                             const SizedBox(height: 16),
                             FilledButton(
@@ -208,20 +228,18 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
                       horizontal: 14,
                       vertical: 10,
                     ),
-                    decoration: BoxDecoration(
-                      color: colors.colorScheme.surface.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: colors.colorScheme.outlineVariant,
+                    decoration: ShapeDecoration(
+                      color: scheme.surface.withValues(alpha: 0.94),
+                      shape: AppShape.all(AppCorner.sm).copyWith(
+                        side: BorderSide(color: scheme.outlineVariant),
                       ),
                     ),
                     child: Text(
                       l10n.t('loginAutoNote'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors.colorScheme.onSurfaceVariant,
-                      ),
+                      style: AppTextStyle.caption2
+                          .of(context)
+                          .copyWith(color: scheme.onSurfaceVariant),
                     ),
                   ),
                 ),

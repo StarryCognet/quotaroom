@@ -1,20 +1,42 @@
 # QuotaRoom / 额度空间
 
 [![GitHub release](https://img.shields.io/github/v/release/StarryCognet/quotaroom)](https://github.com/StarryCognet/quotaroom/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/StarryCognet/quotaroom)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/github/license/StarryCognet/quotaroom)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%207.0%2B%20%7C%20Windows%2010%2B-3DDC84?logo=android)](https://github.com/StarryCognet/quotaroom/releases/latest)
 
 > 所有套餐的额度空间，一眼看清。
 
 QuotaRoom 是一个本地优先的 OpenCode Go 用量面板，提供 **Android** 与 **Windows 桌面** 两个客户端：配额窗口、Token 构成、模型排行、使用记录集中在同一处，打开即见。手机和电脑共用同一套 Flutter 代码，数据分别保存在本机 SQLite 中，登录凭证只用于请求 opencode.ai 官方接口。
 
-QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencode-go-gauge) 的 **Flutter 移植版与品牌重构**，按 MIT 协议开源；不是 OpenCode 或上游作者发布的官方产品。
+QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencode-go-gauge) 的 **Flutter 移植版与品牌重构**。v2.3.0 起界面采用 FlClash 风格的 [prism_ui](https://github.com/chen08209/prism_ui)，项目按 **GPL-3.0** 开源（上游 GoGauge 代码保留 MIT）；不是 OpenCode、GoGauge 或 FlClash 官方发布的产品。
 
 ## 截图
 
-![Windows 桌面端首页](docs/screenshot-desktop-home.png)
+| Windows 桌面端 | Windows 登录 |
+| --- | --- |
+| ![Windows 桌面端首页](docs/screenshot-desktop-home.png) | ![Windows 登录](docs/screenshot-desktop-login.png) |
 
-*Windows 桌面端：宽屏左侧导航，配额、概览与 24 小时趋势同屏展示。*
+| 统计 | 模型用量 |
+| --- | --- |
+| ![桌面统计](docs/screenshot-desktop-stats.png) | ![模型用量](docs/screenshot-desktop-models.png) |
+
+| 记录 | 记录明细 |
+| --- | --- |
+| ![桌面记录](docs/screenshot-desktop-records.png) | ![记录明细](docs/screenshot-desktop-record-detail.png) |
+
+| Key 用量 | 账号 |
+| --- | --- |
+| ![Key 用量](docs/screenshot-desktop-keys.png) | ![桌面账号](docs/screenshot-desktop-accounts.png) |
+
+| 设置 | 关于 |
+| --- | --- |
+| ![桌面设置](docs/screenshot-desktop-settings.png) | ![桌面关于](docs/screenshot-desktop-about.png) |
+
+| 开源许可 |
+| --- |
+| ![桌面许可](docs/screenshot-desktop-licenses.png) |
+
+*Windows 桌面端全部页面使用 prism_ui：可折叠侧栏、bento 首页、悬浮导航、squircle 卡片和 prism_ui 弹窗 / 表单 sheet。截图使用独立演示库生成。*
 
 | 首页 | 登录 |
 | --- | --- |
@@ -32,22 +54,23 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 | --- | --- |
 | ![深色](docs/screenshot-dark.png) | ![关于](docs/screenshot-about.png) |
 
-> 手机截图来自 Android 版；桌面截图使用独立的演示数据库生成。
+> 桌面截图使用独立的演示数据库生成。移动端截图为 v2.1.1 的 Android 版；v2.3.0 的 prism 移动布局使用悬浮 dock，可在 Windows 窄窗口复现。
 
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- 从 v2.2.0 起，每个 Release 同时提供：
-  - `QuotaRoom-v2.2.0.apk`：Android 7.0+ 安装包
-  - `QuotaRoom-v2.2.0-windows-x64-setup.exe`：Windows 安装版
-  - `QuotaRoom-v2.2.0-windows-x64.zip`：Windows 免安装便携版
-  - `QuotaRoom-v2.2.0-windows-x64-single.exe`：Windows 单文件自解压版
+- 从 v2.3.0 起，每个 Release 同时提供：
+  - `QuotaRoom-v2.3.0.apk`：Android 7.0+ 安装包
+  - `QuotaRoom-v2.3.0-windows-x64-setup.exe`：Windows 安装版
+  - `QuotaRoom-v2.3.0-windows-x64.zip`：Windows 免安装便携版
+  - `QuotaRoom-v2.3.0-windows-x64-single.exe`：Windows 单文件自解压版
   - `SHA256SUMS.txt` / `SHA256SUMS-windows.txt`：校验和
 
 > APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。Windows 版解压即用，更新时解压覆盖原目录即可。
 
 ## 更新记录
 
+- **v2.3.0**：全页面迁移到 FlClash 风格 prism_ui——首页、统计、记录（会话 / 明细 / Key）、账号、设置、关于、开源许可、登录页与 WebView 登录全部换新；桌面可折叠侧栏、移动悬浮 dock（下方无独立背景层）、squircle 卡片、tinted surface、bento 首页；页面 / 子 Tab / 路由切换、卡片入场、KPI 数值、进度条与图表绘制均带过渡动画。趋势图、柱状图、环形图、sparkline 改为 prism 配色 + CustomPainter，不再依赖 Material 页面或 fl_chart；项目许可证切换为 GPL-3.0（上游 GoGauge 代码保留 MIT）。
 - **v2.2.0**：新增 Windows 桌面端——FFI SQLite、Windows 凭据管理器存储 Cookie、浏览器登录 + 粘贴 Cookie、宽屏左侧导航与快捷键（`Ctrl+1…5`、`Ctrl+R`/`F5`）、Windows Toast 提醒、桌面「另存为」导出、更新公告识别 Windows 便携版 zip；Android 功能、包名、签名与数据格式保持不变。
 - **v2.1.1**：修正更新公告彩带动效——弹窗完全出现后再播放，时长延长到 3 秒，粒子从标题下方朝下喷洒，暗色 / AMOLED 下也清晰可见。
 - **v2.1.0**：应用内更新流程——启动后每日自动检查 GitHub Release，发现新版本时弹出带彩带效果的更新公告，展示版本与更新内容；点击「下载并安装」显示实时进度并自动拉起 Android 系统安装器，首次安装引导授权「安装未知应用」；「稍后再说」后同一版本不再反复弹窗。
@@ -60,10 +83,12 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 来源与声明 / Source & Attribution
 
 - 上游作者：yphyphyph
-- 上游协议：MIT（见 [LICENSE](LICENSE)）
+- 上游协议：MIT（上游 GoGauge 代码；完整 MIT 文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）
+- 本仓库协议：GPL-3.0（v2.3.0 起；v2.2.0 及更早版本为 MIT）
 - 上游项目：<https://github.com/yphyphyph/opencode-go-gauge>
+- 界面来源：[FlClash](https://github.com/chen08209/FlClash) 与 [prism_ui](https://github.com/chen08209/prism_ui)（均为 GPL-3.0，Copyright (c) chen08209 and contributors）
 - 本仓库的改动：品牌重构为 QuotaRoom / 额度空间，使用新包名 `com.starrycognet.quotaroom` 和原创容量罐图标；用 Flutter/Dart 重写界面；把上游 Python 的 API 客户端、配额解析、SQLite 聚合、增量/全量同步游标移植到 Dart；新增 Android 内置 WebView 登录、原生 CookieManager 桥、移动端底部导航、图表、深浅色与中英切换、Keystore 凭证存储、App 内开源许可页。
-- 本仓库在 v2.2.0 新增 Windows 桌面端：同一套 Flutter 界面增加宽屏导航、FFI SQLite、Windows 凭据管理器 / AES-GCM 凭证存储、系统浏览器 + Cookie 登录、Toast 通知与桌面导出流程。
+- 本仓库在 v2.2.0 新增 Windows 桌面端；v2.3.0 将全部页面切换为 FlClash 风格 prism_ui：宽屏可折叠侧栏、移动悬浮 dock、squircle 卡片、tinted surface、bento 首页与 prism_ui 登录页；同时保留 FFI SQLite、Windows 凭据管理器 / AES-GCM 凭证存储、系统浏览器 + Cookie 登录、Toast 通知与桌面导出流程。
 - 本仓库的前身是 [StarryCognet/gogauge-mobile](https://github.com/StarryCognet/gogauge-mobile)（GoGauge Mobile v1.0.0）；QuotaRoom 使用新包名，与旧版是独立应用。
 - 上游的 Windows 桌面版是独立项目，本仓库的 Windows 版是基于本仓库 Flutter 代码的独立实现，并非上游桌面版代码。
 - 通用逻辑问题欢迎同时反馈给上游；移动端 / 桌面端适配问题请在本仓库提 issue。
@@ -93,13 +118,17 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 - 多账号：添加 / 切换 / 重命名 / 重新登录 / 退出 / 删除
 - 自动增量同步（1/5/15/30 分钟），同步范围（30/60/90/180 天 / 全部）
 - 浅色 / 深色 / 跟随系统 / AMOLED 纯黑，中文 / English，CNY / USD
+- FlClash 风格 prism_ui 外壳：桌面可折叠侧栏、移动悬浮 dock、squircle 卡片、tinted surface、bento 首页与 prism_ui 登录页
+- 全局过渡动画：TabBarView 页面滑动、子 Tab 滑动、路由 slide + fade、卡片入场、KPI 数值切换、进度条增长、图表绘制动画
+- 悬浮 dock 直接覆盖在可滚动内容上，底部不再有空白的独立背景层
 - 数据本地优先；登录凭证加密存储
-- 关于页内置开源许可查看器，展示上游 MIT 文本
+- 关于页内置许可查看器，展示 GPL-3.0、上游 MIT 文本与 FlClash / prism_ui 第三方声明
 
 ### Windows 桌面端
 
 - 三种分发形态：安装版 `setup.exe`、便携版 zip、单文件 `single.exe`
-- 窗口宽度 ≥ 840px 时自动切换左侧导航栏，内容区最大 1240px 居中
+- 宽度 ≥ 700px 使用左侧导航栏（≥ 900px 可展开，窄窗口自动收起为图标栏）；宽度 < 700px 切换为 FlClash 风格悬浮 dock
+- 内容区最大 1240px 居中，卡片使用 squircle 连续圆角与 tinted surface
 - `Ctrl+1…5` 切换首页 / 统计 / 记录 / 账号 / 设置，`Ctrl+R` / `F5` 立即同步
 - 系统浏览器打开 opencode.ai，登录后粘贴 `__Host-console_session`
 - Windows Toast 额度 / 预算提醒
@@ -120,7 +149,7 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v2.2.0.apk
+adb install -r QuotaRoom-v2.3.0.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。
@@ -131,9 +160,9 @@ adb install -r QuotaRoom-v2.2.0.apk
 
 | 形态 | 文件 | 使用方式 |
 | --- | --- | --- |
-| 安装版 | `QuotaRoom-v2.2.0-windows-x64-setup.exe` | 双击安装，默认装到 `%LOCALAPPDATA%\Programs\QuotaRoom`，创建开始菜单 / 可选桌面快捷方式，可在「应用和功能」卸载；不需要管理员权限 |
-| 便携版 | `QuotaRoom-v2.2.0-windows-x64.zip` | 解压到任意目录，运行 `QuotaRoom.exe`；更新时解压覆盖 |
-| 单文件 | `QuotaRoom-v2.2.0-windows-x64-single.exe` | 只有一个 exe，双击后先自解压到临时目录再启动；首次启动可能多等几秒 |
+| 安装版 | `QuotaRoom-v2.3.0-windows-x64-setup.exe` | 双击安装，默认装到 `%LOCALAPPDATA%\Programs\QuotaRoom`，创建开始菜单 / 可选桌面快捷方式，可在「应用和功能」卸载；不需要管理员权限 |
+| 便携版 | `QuotaRoom-v2.3.0-windows-x64.zip` | 解压到任意目录，运行 `QuotaRoom.exe`；更新时解压覆盖 |
+| 单文件 | `QuotaRoom-v2.3.0-windows-x64-single.exe` | 只有一个 exe，双击后先自解压到临时目录再启动；首次启动可能多等几秒 |
 
 要求：Windows 10/11 x64。三种形态共用 `%APPDATA%\StarryCognet\QuotaRoom` 下的数据库和凭证，切换形态不会丢数据。安装版卸载不会删除这份用户数据。
 
@@ -205,23 +234,23 @@ dart run tool/windows_plugin_links.dart   # 仅在未开启开发者模式时需
 flutter build windows --release
 
 # 生成三种分发形态到 dist/
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0
 ```
 
 也可以只打某一种：
 
 ```bash
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0 -SkipInstaller
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0 -SkipSingleFile
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0 -SkipSingleFile
 ```
 
 产物：
 
 ```
 build/windows/x64/runner/Release/QuotaRoom.exe          # Flutter 原始构建
-dist/QuotaRoom-2.2.0-windows-x64-setup.exe              # 安装版
-dist/QuotaRoom-2.2.0-windows-x64.zip                    # 便携版
-dist/QuotaRoom-2.2.0-windows-x64-single.exe             # 单文件版
+dist/QuotaRoom-2.3.0-windows-x64-setup.exe              # 安装版
+dist/QuotaRoom-2.3.0-windows-x64.zip                    # 便携版
+dist/QuotaRoom-2.3.0-windows-x64-single.exe             # 单文件版
 dist/SHA256SUMS-windows.txt                             # 三者校验和
 ```
 
@@ -251,6 +280,7 @@ lib/
   data/            opencode API 客户端、SQLite、同步、配额、汇率
   state/           AppState（ChangeNotifier）
   ui/              登录、导航、图表、开源许可页与通用组件
+  ui/prism/        FlClash 风格 prism_ui 外壳、首页、登录页与 glyph 集
 android/           MainActivity 中的 HttpOnly Cookie 原生桥
 windows/           Windows runner（QuotaRoom.exe、图标、版本信息）
   installer/       Inno Setup 安装版脚本与简体中文语言文件
@@ -261,7 +291,8 @@ tool/package_windows.ps1        生成 zip / setup.exe / single.exe 三种形态
 test/              API 解析、聚合口径、同步引擎、更新解析测试
 assets/
   icon/            QuotaRoom 容量罐图标（PNG + 源 SVG）
-  LICENSE          App 内展示的 MIT 许可文本
+  LICENSE          App 内展示的 GPL-3.0 全文 + 第三方声明
+THIRD_PARTY_NOTICES.md  上游 MIT、FlClash / prism_ui 与依赖许可说明
 ```
 
 关键移植来源：
@@ -277,10 +308,11 @@ assets/
 - `flutter analyze`：无问题
 - `flutter test`：43 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、Key 聚合、分页、去重、裁剪、增量游标、配额缓存、更新附件解析）
 - `flutter build windows --release`：构建成功，生成 `QuotaRoom.exe`
-- `tool/package_windows.ps1`：便携 zip、Inno Setup 安装包、单文件 SFX 均构建成功；安装包已实测静默安装、开始菜单 / 卸载入口、启动与卸载清理；单文件已实测解压启动并在退出后清理临时目录
-- Windows 实机验证：启动、浏览器登录 + Cookie 回填、Windows 凭据存储、FFI SQLite 建库、首次全量同步、首页 / 宽屏导航 / 图表 / 浅色主题
+- `tool/package_windows.ps1`：便携 zip 构建成功；安装版 / 单文件版需要 Inno Setup + 7-Zip，当前机器未安装，本轮只验证了 zip；CI 已加入自动安装这两个工具的步骤
+- Windows 实机验证：启动、浏览器登录 + Cookie 回填、Windows 凭据存储、FFI SQLite 建库、首次全量同步
+- prism_ui 全页面实机验证：可折叠桌面侧栏、移动悬浮 dock（内容可滚到 dock 下方）、`首页 / 统计 / 记录 / 账号 / 设置` 切换与页面滑动动画、bento 首页、squircle 卡片、浅色 / 深色主题、prism 登录页与 Cookie 表单、记录三 Tab 与子 Tab 动画、Key 下钻、账号菜单、设置分组、关于 / 许可页、prism 对话框 / 菜单 / 表单 sheet、自定义 CustomPainter 图表，以及页面滑动 / 子 Tab / 路由 / 卡片 / 数值 / 进度条动画
 - Windows Toast 通知初始化无报错；桌面「另存为」导出、剪贴板摘要与按平台分流的更新流程已实现
-- Android：v2.1.1 的登录、WebView、五个 Tab、Key 用量、滑到底加载、深色模式、中英切换、模型筛选、开源许可页均已在 Android 15 x86_64 模拟器实测；v2.2.0 的 Android 构建由 CI 继续覆盖
+- Android：`flutter build apk --release` 构建成功（62.0 MB）；当前环境没有 Android 设备 / 模拟器，v2.3.0 运行时未复测。v2.1.1 的登录、WebView、五个 Tab、Key 用量、滑到底加载、深色模式、中英切换、模型筛选、开源许可页均已在 Android 15 x86_64 模拟器实测；v2.3.0 的 Android 构建由 CI 继续覆盖
 
 ## 已知限制
 
@@ -290,6 +322,8 @@ assets/
 - Windows 可执行文件暂未做代码签名，SmartScreen 可能提示「未知发布者」；安装版、便携版、单文件版都如此。
 - 桌面端应用内更新目前下载便携版 zip；安装版 / 单文件版用户也可以到 Release 页面选择对应附件。更新不做静默替换。
 - 单文件版是自解压启动器，首次启动需要先解压 Flutter 运行时（约 30 MB），因此比便携版慢几秒；它不是真正的单二进制 Flutter 应用。
+- v2.3.0 的桌面 / 移动页面、弹窗与图表均已迁移；趋势图、柱状图、环形图和 sparkline 改为 prism 配色 + CustomPainter，不再依赖 fl_chart 或 Material 页面组件。
+- prism_ui 目前为 0.1.2，版本较新；如遇组件行为变化，可以回退到 Flutter widgets 实现，页面结构不受影响。
 - 登录仍是最脆弱环节：opencode.ai 改登录页或 Cookie 策略时需要同步调整；粘贴 Cookie 兜底始终可用。
 - 官方明细接口只保留 30 天，超过 30 天的数据只能依赖本机历史累积。
 - macOS / Linux 尚未提供构建产物；Flutter 代码中的平台分支已预留，但未做发布验证。
@@ -304,13 +338,19 @@ assets/
 
 ## 开源许可
 
-本项目按 **MIT License** 开源。上游 GoGauge 的版权声明保留在 [LICENSE](LICENSE) 和 [NOTICE](NOTICE) 中，并作为 `assets/LICENSE` 打包进 APK；App 内「关于 → 开源许可」可查看完整文本。你可以自由 fork、修改、改名再发布，但需要保留上游版权与许可声明，并避免暗示官方背书。
+本项目 **v2.3.0 起按 GNU General Public License v3.0（GPL-3.0）** 开源；v2.2.0 及更早版本仍为 MIT。完整 GPL 文本见 [LICENSE](LICENSE)，并作为 `assets/LICENSE` 打包进 App；App 内「关于 → 开源许可」可查看 GPL 全文与第三方声明。
+
+- 上游 GoGauge 代码保留 MIT 许可与版权声明，MIT 全文见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- FlClash / prism_ui 界面组件按 GPL-3.0 使用，版权归 chen08209 and contributors。
+- 由于 GPL-3.0 的 copyleft 性质，分发本项目的修改版时需要按 GPL-3.0 提供对应源码，并保留上游 MIT 与 FlClash / prism_ui 的版权声明。
+- 你可以 fork、修改、改名再发布，但请避免暗示官方背书。
 
 ## 致谢
 
 - 上游项目：[yphyphyph/opencode-go-gauge](https://github.com/yphyphyph/opencode-go-gauge)（MIT）
+- UI 设计系统：[chen08209/prism_ui](https://github.com/chen08209/prism_ui)、[chen08209/FlClash](https://github.com/chen08209/FlClash)（GPL-3.0）
 - 数据与接口：<https://opencode.ai>
-- 图表：[fl_chart](https://pub.dev/packages/fl_chart)
+- 图表：prism 配色 + 自定义 CustomPainter
 - 桌面 SQLite：[sqflite_common_ffi](https://pub.dev/packages/sqflite_common_ffi) / [sqlite3](https://pub.dev/packages/sqlite3)
 
 ## 相关仓库

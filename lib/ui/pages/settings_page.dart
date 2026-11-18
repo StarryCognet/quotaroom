@@ -1,20 +1,24 @@
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, TextInputType;
+import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
 import '../../core/platform.dart';
-import '../../core/theme.dart';
 import '../../data/export_service.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
-import '../login/login_page.dart';
+import '../prism/app_glyphs.dart';
+import '../prism/prism_login_page.dart';
+import '../prism/prism_route.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/update_dialog.dart';
@@ -27,7 +31,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final account = state.activeAccount;
     final sync = state.dashboard?.sync;
     final lastSync = fmtRelative(
@@ -39,7 +43,12 @@ class SettingsPage extends StatelessWidget {
       dayAgo: l10n.t('dayAgo'),
     );
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        context.appBarInset + 8,
+        16,
+        24 + context.bottomInset,
+      ),
       children: [
         SyncBanner(progress: state.progress, l10n: l10n),
         _SettingsCard(
@@ -50,7 +59,9 @@ class SettingsPage extends StatelessWidget {
               value: account?.hasToken == true
                   ? l10n.t('loggedIn')
                   : l10n.t('notLoggedIn'),
-              valueColor: account?.hasToken == true ? colors.green : colors.red,
+              valueColor: account?.hasToken == true
+                  ? const Color(0xFF16A34A)
+                  : scheme.error,
             ),
             _InfoRow(label: l10n.t('accountName'), value: account?.name ?? '—'),
             _InfoRow(
@@ -67,18 +78,18 @@ class SettingsPage extends StatelessWidget {
             _ActionRow(
               label: l10n.t('addUser'),
               subtitle: l10n.t('addUserTip'),
-              icon: Icons.person_add_alt_1_rounded,
+              glyph: AppGlyphs.addCircle,
               onTap: () => _openLogin(context, relogin: false),
             ),
             _ActionRow(
               label: l10n.t('relogin'),
-              icon: Icons.login_rounded,
+              glyph: AppGlyphs.key,
               onTap: () => _openLogin(context, relogin: true),
             ),
             _ActionRow(
               label: l10n.t('setLogout'),
               subtitle: l10n.t('logoutDesc'),
-              icon: Icons.logout_rounded,
+              glyph: AppGlyphs.lock,
               danger: true,
               onTap: () => _logout(context),
             ),
@@ -137,7 +148,7 @@ class SettingsPage extends StatelessWidget {
             if (state.settings.notificationsEnabled)
               _ActionRow(
                 label: l10n.t('testNotification'),
-                icon: Icons.notifications_active_outlined,
+                glyph: AppGlyphs.toggleOn,
                 onTap: () => _testNotification(context, state),
               ),
           ],
@@ -213,31 +224,31 @@ class SettingsPage extends StatelessWidget {
             _ActionRow(
               label: l10n.t('exportRecords'),
               subtitle: l10n.t('exportRecordsDesc'),
-              icon: Icons.description_outlined,
+              glyph: AppGlyphs.export,
               onTap: () => _exportRecords(context),
             ),
             _ActionRow(
               label: l10n.t('exportKeys'),
               subtitle: l10n.t('exportKeysDesc'),
-              icon: Icons.table_chart_outlined,
+              glyph: AppGlyphs.dataUsage,
               onTap: () => _exportKeys(context),
             ),
             _ActionRow(
               label: l10n.t('backupDatabase'),
               subtitle: l10n.t('backupHint'),
-              icon: Icons.archive_outlined,
+              glyph: AppGlyphs.cloudDownload,
               onTap: () => _backupDatabase(context),
             ),
             _ActionRow(
               label: l10n.t('backupRestore'),
               subtitle: l10n.t('backupRestoreHint'),
-              icon: Icons.settings_backup_restore_rounded,
+              glyph: AppGlyphs.undo,
               onTap: () => _restoreBackup(context),
             ),
             _ActionRow(
               label: l10n.t('shareSummary'),
               subtitle: l10n.t('shareSummaryHint'),
-              icon: Icons.ios_share_rounded,
+              glyph: AppGlyphs.openExternal,
               onTap: () => _shareSummary(context),
             ),
           ],
@@ -259,20 +270,26 @@ class SettingsPage extends StatelessWidget {
           child: _ActionRow(
             label: l10n.t('aboutTitle'),
             subtitle: 'QuotaRoom · ${l10n.t('aboutIntro')}',
-            icon: Icons.info_outline_rounded,
-            onTap: () =>
-                Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const AboutPage())),
+            glyph: AppGlyphs.info,
+            onTap: () => Navigator.of(context)
+                .push(prismPageRoute<void>(builder: (_) => const AboutPage())),
           ),
         ),
         const SizedBox(height: 18),
         Text(
           l10n.t('dataPrivacyDesc'),
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 10.5, color: colors.text3, height: 1.6),
+          style: AppTextStyle.caption2
+              .of(context)
+              .copyWith(color: scheme.onSurfaceVariant, height: 1.6),
         ),
       ],
     );
+  }
+
+  void _notice(BuildContext context, String text, {bool error = false}) {
+    BannerHost.maybeOf(context)
+        ?.show(text, level: error ? BannerLevel.error : BannerLevel.success);
   }
 
   Future<void> _toggleNotifications(
@@ -283,23 +300,19 @@ class SettingsPage extends StatelessWidget {
     final enabled = await state.setNotificationsEnabled(value);
     if (!context.mounted) return;
     if (value && !enabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.l10n.t('notificationsDenied'))),
-      );
+      _notice(context, state.l10n.t('notificationsDenied'), error: true);
     }
   }
 
   Future<void> _testNotification(BuildContext context, AppState state) async {
     final sent = await state.sendTestNotification();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          sent
-              ? state.l10n.t('testNotification')
-              : state.l10n.t('notificationsDenied'),
-        ),
-      ),
+    _notice(
+      context,
+      sent
+          ? state.l10n.t('testNotification')
+          : state.l10n.t('notificationsDenied'),
+      error: !sent,
     );
   }
 
@@ -323,9 +336,7 @@ class SettingsPage extends StatelessWidget {
     if (location == null) return;
     await file.copy(location.path);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.t('savedTo', {'path': location.path}))),
-    );
+    _notice(context, l10n.t('savedTo', {'path': location.path}));
   }
 
   Future<void> _exportRecords(BuildContext context) async {
@@ -344,9 +355,7 @@ class SettingsPage extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+      _notice(context, '${l10n.t('exportFailed')}: $e', error: true);
     }
   }
 
@@ -366,9 +375,7 @@ class SettingsPage extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+      _notice(context, '${l10n.t('exportFailed')}: $e', error: true);
     }
   }
 
@@ -386,9 +393,7 @@ class SettingsPage extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+      _notice(context, '${l10n.t('exportFailed')}: $e', error: true);
     }
   }
 
@@ -404,36 +409,22 @@ class SettingsPage extends StatelessWidget {
       ],
     );
     if (file == null || !context.mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.t('restoreConfirmTitle')),
-        content: Text(l10n.t('restoreConfirmBody')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.t('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.t('backupRestore')),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.t('restoreConfirmTitle'),
+      message: l10n.t('restoreConfirmBody'),
+      cancelLabel: l10n.t('cancel'),
+      confirmLabel: l10n.t('backupRestore'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     try {
       final bytes = await file.readAsBytes();
       final restored = await state.restoreUsageFromBackup(bytes);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.t('restoreDone', {'n': fmtInt(restored)}))),
-      );
+      _notice(context, l10n.t('restoreDone', {'n': fmtInt(restored)}));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('restoreFailed')}: $e')));
+      _notice(context, '${l10n.t('restoreFailed')}: $e', error: true);
     }
   }
 
@@ -442,8 +433,7 @@ class SettingsPage extends StatelessWidget {
     final l10n = state.l10n;
     final data = state.dashboard;
     if (data == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.t('shareSummaryEmpty'))));
+      _notice(context, l10n.t('shareSummaryEmpty'));
       return;
     }
     final range = switch (state.dashboardRange) {
@@ -476,8 +466,7 @@ class SettingsPage extends StatelessWidget {
       if (isDesktop) {
         await Clipboard.setData(ClipboardData(text: text));
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.t('copiedToClipboard'))));
+        _notice(context, l10n.t('copiedToClipboard'));
         return;
       }
       await ExportService(
@@ -486,16 +475,14 @@ class SettingsPage extends StatelessWidget {
       ).shareText(text);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('exportFailed')}: $e')));
+      _notice(context, '${l10n.t('exportFailed')}: $e', error: true);
     }
   }
 
   Future<void> _openLogin(BuildContext context, {required bool relogin}) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LoginPage(asRoute: true, relogin: relogin),
+      prismPageRoute<void>(
+        builder: (_) => PrismLoginPage(asRoute: true, relogin: relogin),
       ),
     );
   }
@@ -514,8 +501,7 @@ class SettingsPage extends StatelessWidget {
     if (!confirmed) return;
     await state.logoutActive();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(l10n.t('loggedOut'))));
+    _notice(context, l10n.t('loggedOut'));
   }
 }
 
@@ -527,15 +513,13 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
-      if (i == 0) {
-        rows.add(Divider(height: 1, color: colors.border));
-      }
+      if (i == 0) rows.add(const Divider(height: 1, thickness: 1));
       rows.add(children[i]);
       if (i < children.length - 1) {
-        rows.add(Divider(height: 1, color: colors.border));
+        rows.add(const Divider(height: 1, thickness: 1));
       }
     }
     return AppCard(
@@ -544,14 +528,12 @@ class _SettingsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 10),
             child: Text(
               title,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: colors.text,
-              ),
+              style: AppTextStyle.caption1
+                  .of(context, emphasized: true)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
           ...rows,
@@ -570,9 +552,9 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -580,7 +562,9 @@ class _InfoRow extends StatelessWidget {
             width: 104,
             child: Text(
               label,
-              style: TextStyle(fontSize: 12, color: colors.text2),
+              style: AppTextStyle.caption1
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 10),
@@ -590,12 +574,9 @@ class _InfoRow extends StatelessWidget {
               textAlign: TextAlign.right,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? colors.text,
-                height: 1.4,
-              ),
+              style: AppTextStyle.caption1
+                  .of(context, emphasized: true)
+                  .copyWith(color: valueColor ?? scheme.onSurface, height: 1.4),
             ),
           ),
         ],
@@ -607,7 +588,7 @@ class _InfoRow extends StatelessWidget {
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.label,
-    required this.icon,
+    required this.glyph,
     required this.onTap,
     this.subtitle,
     this.danger = false,
@@ -615,47 +596,57 @@ class _ActionRow extends StatelessWidget {
 
   final String label;
   final String? subtitle;
-  final IconData icon;
+  final Glyph glyph;
   final VoidCallback onTap;
   final bool danger;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final color = danger ? colors.red : colors.text;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: danger ? colors.red : colors.text2),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+    final scheme = context.colorScheme;
+    final color = danger ? scheme.error : scheme.onSurface;
+    return PressSurface(
+      fill: const Color(0x00000000),
+      shape: AppShape.all(0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      onPressed: onTap,
+      child: Row(
+        children: [
+          GlyphIcon(
+            glyph,
+            size: 19,
+            color: danger ? scheme.error : scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: color),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
+                    subtitle!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyle.caption2
+                        .of(context)
+                        .copyWith(color: scheme.onSurfaceVariant),
                   ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(fontSize: 10.5, color: colors.text3),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
-            Icon(Icons.chevron_right_rounded, size: 19, color: colors.text3),
-          ],
-        ),
+          ),
+          GlyphIcon(
+            AppGlyphs.chevronForward,
+            size: 18,
+            color: scheme.onSurfaceVariant,
+          ),
+        ],
       ),
     );
   }
@@ -676,9 +667,9 @@ class _SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       child: Row(
         children: [
           Expanded(
@@ -687,16 +678,16 @@ class _SwitchRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 10.5, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -726,22 +717,25 @@ class _PillRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: colors.text,
-            ),
+            style: AppTextStyle.caption1
+                .of(context, emphasized: true)
+                .copyWith(color: scheme.onSurface),
           ),
           const SizedBox(height: 2),
-          Text(subtitle, style: TextStyle(fontSize: 10.5, color: colors.text3)),
+          Text(
+            subtitle,
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 9),
           PillSelector<T>(
             value: value,
@@ -763,10 +757,10 @@ class _FullSyncRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = state.l10n;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final running = state.progress.running;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
       child: Row(
         children: [
           Expanded(
@@ -775,18 +769,18 @@ class _FullSyncRow extends StatelessWidget {
               children: [
                 Text(
                   l10n.t('fullSync'),
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   running
                       ? '${l10n.t('syncRunning')} · ${l10n.t('pagePrefix')} ${state.progress.page + 1}'
                       : l10n.t('fullSyncDesc'),
-                  style: TextStyle(fontSize: 10.5, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -794,10 +788,6 @@ class _FullSyncRow extends StatelessWidget {
           const SizedBox(width: 10),
           FilledButton(
             onPressed: running ? null : () => _startFullSync(context),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(fontSize: 11.5),
-            ),
             child: Text(l10n.t('startFullSync')),
           ),
         ],
@@ -820,7 +810,9 @@ class _FullSyncRow extends StatelessWidget {
     final text = result.ok
         ? '${l10n.t('syncDone')} · +${result.inserted}'
         : '${l10n.t('syncFailed')}: ${result.error ?? ''}';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    BannerHost.maybeOf(
+      context,
+    )?.show(text, level: result.ok ? BannerLevel.success : BannerLevel.error);
   }
 }
 
@@ -832,13 +824,13 @@ class _BudgetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = state.l10n;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final budget = state.settings.dailyBudgetUsd;
     final label = budget == null
         ? l10n.t('notSet')
         : fmtMoney(budget, currency: state.currency, rate: state.usdCny);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+      padding: const EdgeInsets.fromLTRB(16, 11, 12, 11),
       child: Row(
         children: [
           Expanded(
@@ -847,25 +839,22 @@ class _BudgetRow extends StatelessWidget {
               children: [
                 Text(
                   l10n.t('dailyBudget'),
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   l10n.t('dailyBudgetDesc'),
-                  style: TextStyle(fontSize: 10.5, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          TextButton(
-            onPressed: () => _edit(context),
-            child: Text(label, style: const TextStyle(fontSize: 12)),
-          ),
+          TextButton(onPressed: () => _edit(context), child: Text(label)),
         ],
       ),
     );
@@ -879,57 +868,54 @@ class _BudgetRow extends StatelessWidget {
         : (state.currency == 'CNY' ? current * state.usdCny : current)
               .toStringAsFixed(2);
     final controller = TextEditingController(text: display);
-    final result = await showDialog<String>(
+    final result = await showFloatingDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.t('dailyBudgetEdit')),
-        content: TextField(
+      child: AlertDialog(
+        title: l10n.t('dailyBudgetEdit'),
+        hasFields: true,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.t('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('__clear__'),
+            child: Text(l10n.t('clear')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(l10n.t('save')),
+          ),
+        ],
+        child: TextField(
           controller: controller,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-            labelText: l10n.t('dailyBudget'),
             hintText: l10n.t('budgetInputHint', {'currency': state.currency}),
             prefixText: state.currency == 'CNY' ? '¥ ' : '\$ ',
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.t('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop('__clear__'),
-            child: Text(l10n.t('clear')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(l10n.t('save')),
-          ),
-        ],
       ),
     );
     if (result == null) return;
     if (result == '__clear__') {
       await state.setDailyBudget(null);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.t('budgetCleared'))));
+      BannerHost.maybeOf(context)?.show(l10n.t('budgetCleared'));
       return;
     }
     final value = double.tryParse(result.trim().replaceAll(',', '.'));
     if (value == null || value <= 0) {
       await state.setDailyBudget(null);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.t('budgetCleared'))));
+      BannerHost.maybeOf(context)?.show(l10n.t('budgetCleared'));
       return;
     }
     final usd = state.currency == 'CNY' ? value / state.usdCny : value;
     await state.setDailyBudget(usd);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(l10n.t('budgetSaved'))));
+    BannerHost.maybeOf(context)?.show(l10n.t('budgetSaved'));
   }
 }
 
@@ -972,8 +958,7 @@ class _UpdateRowState extends State<_UpdateRow> {
       final info = await widget.state.checkForUpdate(force: true);
       if (!mounted) return;
       if (info == null || !info.hasUpdate) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.t('updateNone'))));
+        BannerHost.maybeOf(context)?.show(l10n.t('updateNone'));
         return;
       }
       await showUpdateDialog(context, state: widget.state, info: info);
@@ -982,8 +967,7 @@ class _UpdateRowState extends State<_UpdateRow> {
       final message = e.toString().contains('403')
           ? l10n.t('updateRateLimited')
           : '${l10n.t('updateFailed')}: $e';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      BannerHost.maybeOf(context)?.show(message, level: BannerLevel.error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -996,7 +980,7 @@ class _UpdateRowState extends State<_UpdateRow> {
       subtitle: _busy
           ? widget.l10n.t('checkingUpdate')
           : widget.l10n.t('checkUpdateDesc'),
-      icon: Icons.system_update_alt_rounded,
+      glyph: AppGlyphs.cloudDownload,
       onTap: _busy ? () {} : _check,
     );
   }
@@ -1010,7 +994,7 @@ class _SyncLogRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final ok = entry['ok'] == true;
     final partial = entry['partial'] == true;
     final error = (entry['error'] ?? '').toString();
@@ -1019,13 +1003,15 @@ class _SyncLogRow extends StatelessWidget {
     final mode = entry['mode'] == 'full'
         ? l10n.t('fullSyncMode')
         : l10n.t('incrementalMode');
-    final color = ok ? (partial ? colors.amber : colors.green) : colors.red;
+    final color = ok
+        ? (partial ? const Color(0xFFD97706) : const Color(0xFF16A34A))
+        : scheme.error;
     final status = ok
         ? (partial ? l10n.t('syncStatusPartial') : l10n.t('syncStatusOk'))
         : l10n.t('syncStatusError');
     final at = DateTime.tryParse((entry['at'] ?? '').toString())?.toLocal();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1035,25 +1021,25 @@ class _SyncLogRow extends StatelessWidget {
             margin: const EdgeInsets.only(top: 5),
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '$status · $mode',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: color),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '$account · ${fmtDateTimeShort(at)} · $inserted ${l10n.t('items')}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 9.5, color: colors.text3),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
                 if (error.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -1061,7 +1047,9 @@ class _SyncLogRow extends StatelessWidget {
                     error,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 9.5, color: colors.red),
+                    style: AppTextStyle.caption2
+                        .of(context)
+                        .copyWith(color: scheme.error),
                   ),
                 ],
               ],

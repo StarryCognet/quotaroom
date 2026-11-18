@@ -1,16 +1,20 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/icons/icons.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:prism_ui/prism_ui.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
-import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../prism/app_glyphs.dart';
 
+/// Shared cards and rows, now drawn with prism_ui's surfaces, squircle shapes
+/// and type scale so every page matches the FlClash-style shell.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.all(16),
     this.margin,
     this.clipBehavior = Clip.none,
     this.color,
@@ -26,17 +30,44 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
+    final scheme = context.colorScheme;
+    final shape = AppShape.all(AppCorner.lg);
+    final border = borderColor;
+    final card = Container(
       margin: margin,
       clipBehavior: clipBehavior,
-      decoration: BoxDecoration(
-        color: color ?? colors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor ?? colors.border),
-        boxShadow: cardShadowFor(colors),
+      decoration: ShapeDecoration(
+        color: color ?? SurfaceLevel.card.colorOf(scheme),
+        shape: shape,
+        shadows: [
+          BoxShadow(
+            color: const Color(0xFF18122B).withValues(
+              alpha: scheme.brightness == Brightness.dark ? 0.18 : 0.05,
+            ),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
+      foregroundDecoration: border == null
+          ? null
+          : ShapeDecoration(
+              shape: shape.copyWith(side: BorderSide(color: border)),
+            ),
       child: Padding(padding: padding, child: child),
+    );
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, progress, card) => Opacity(
+        opacity: progress.clamp(0.0, 1.0),
+        child: Transform.translate(
+          offset: Offset(0, 10 * (1 - progress)),
+          child: card,
+        ),
+      ),
+      child: card,
     );
   }
 }
@@ -55,7 +86,7 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -65,18 +96,17 @@ class SectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: colors.text,
-                  letterSpacing: -0.2,
-                ),
+                style: AppTextStyle.headline
+                    .of(context, emphasized: true)
+                    .copyWith(color: scheme.onSurface),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   subtitle!,
-                  style: TextStyle(fontSize: 11.5, color: colors.text3),
+                  style: AppTextStyle.caption1
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ],
@@ -111,58 +141,39 @@ class PillSelector<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Container(
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: colors.muted,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final option in options)
-              GestureDetector(
-                onTap: () => onChanged(option.value),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 10 : 13,
-                    vertical: compact ? 6 : 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: option.value == value
-                        ? colors.card
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(7),
-                    boxShadow: option.value == value
-                        ? const [
-                            BoxShadow(
-                              color: Color(0x12000000),
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    option.label,
-                    style: TextStyle(
-                      fontSize: compact ? 11.5 : 12,
-                      fontWeight: option.value == value
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                      color: option.value == value
-                          ? colors.primary
-                          : colors.text2,
-                    ),
-                  ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: PressSurface(
+                fill: option.value == value
+                    ? scheme.primary
+                    : scheme.surfaceContainerHigh,
+                shape: AppShape.full,
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 11 : 15,
+                  vertical: compact ? 6 : 8,
+                ),
+                onPressed: () => onChanged(option.value),
+                child: Text(
+                  option.label,
+                  maxLines: 1,
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(
+                        color: option.value == value
+                            ? scheme.onPrimary
+                            : scheme.onSurfaceVariant,
+                      ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -209,53 +220,62 @@ class KpiCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  final IconData icon;
+  final Glyph icon;
   final String? sub;
   final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+    final scheme = context.colorScheme;
+    final dark = scheme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(15, 13, 15, 13),
+      decoration: ShapeDecoration(
+        color: Color.alphaBlend(
+          color.withValues(alpha: dark ? 0.16 : 0.08),
+          scheme.surface,
+        ),
+        shape: AppShape.all(AppCorner.lg),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 25,
-                height: 25,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(8),
+                width: 27,
+                height: 27,
+                decoration: ShapeDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  shape: AppShape.all(AppCorner.sm),
                 ),
-                child: Icon(icon, size: 14, color: color),
+                child: Center(child: GlyphIcon(icon, size: 15, color: color)),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11.5, color: colors.text3),
+                  style: AppTextStyle.caption1
+                      .of(context, emphasized: true)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 10),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                color: valueColor ?? colors.text,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                letterSpacing: -0.4,
-              ),
+              style: AppTextStyle.title1
+                  .of(context, emphasized: true)
+                  .copyWith(
+                    color: valueColor ?? scheme.onSurface,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
             ),
           ),
           if (sub != null) ...[
@@ -264,7 +284,9 @@ class KpiCard extends StatelessWidget {
               sub!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10.5, color: colors.text3),
+              style: AppTextStyle.caption2
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ],
@@ -287,28 +309,30 @@ class StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.muted,
-        borderRadius: BorderRadius.circular(6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: ShapeDecoration(
+        color: scheme.surfaceContainerHigh,
+        shape: AppShape.all(AppCorner.xs),
       ),
       child: Text.rich(
         TextSpan(
           children: [
             TextSpan(
               text: '$label ',
-              style: TextStyle(fontSize: 9.5, color: colors.text3),
+              style: AppTextStyle.caption2
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
             TextSpan(
               text: value,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: highlight ?? colors.text,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+              style: AppTextStyle.caption2
+                  .of(context, emphasized: true)
+                  .copyWith(
+                    color: highlight ?? scheme.onSurface,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
             ),
           ],
         ),
@@ -327,7 +351,6 @@ class LegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -336,8 +359,13 @@ class LegendDot extends StatelessWidget {
           height: 7,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(fontSize: 11, color: colors.text3)),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: AppTextStyle.caption2
+              .of(context)
+              .copyWith(color: context.colorScheme.onSurfaceVariant),
+        ),
       ],
     );
   }
@@ -346,14 +374,14 @@ class LegendDot extends StatelessWidget {
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
-    required this.icon,
+    required this.glyph,
     required this.title,
     this.subtitle,
     this.action,
     this.compact = false,
   });
 
-  final IconData icon;
+  final Glyph glyph;
   final String title;
   final String? subtitle;
   final Widget? action;
@@ -361,7 +389,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -371,27 +399,37 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: compact ? 32 : 42, color: colors.text3),
+            Container(
+              width: compact ? 48 : 60,
+              height: compact ? 48 : 60,
+              decoration: ShapeDecoration(
+                color: scheme.surfaceContainerHigh,
+                shape: AppShape.all(AppCorner.md),
+              ),
+              child: Center(
+                child: GlyphIcon(
+                  glyph,
+                  size: compact ? 24 : 29,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: colors.text2,
-              ),
+              style: AppTextStyle.footnote
+                  .of(context, emphasized: true)
+                  .copyWith(color: scheme.onSurface),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 5),
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colors.text3,
-                  height: 1.5,
-                ),
+                style: AppTextStyle.caption1
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
             if (action != null) ...[const SizedBox(height: 14), action!],
@@ -416,23 +454,21 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, size: 40, color: colors.red),
+            GlyphIcon(AppGlyphs.warning, size: 40, color: scheme.error),
             const SizedBox(height: 10),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: colors.text2,
-                height: 1.5,
-              ),
+              style: AppTextStyle.footnote
+                  .of(context)
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 14),
             FilledButton(onPressed: onRetry, child: Text(retryLabel)),
@@ -469,7 +505,7 @@ class ModelIcon extends StatelessWidget {
     final base = source.split('-').first;
     var name = _map[base];
     name ??= base.startsWith('hy') ? 'hy' : 'deepseek';
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final dark = Theme.brightnessOf(context) == Brightness.dark;
     var themed = name;
     if (dark && const ['gpt', 'grok', 'mimo'].contains(name)) {
       themed = '$name-color';
@@ -493,39 +529,36 @@ class SyncBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!progress.running) return const SizedBox.shrink();
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              ActivityIndicator(size: 16, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '${l10n.t('syncRunning')} · ${progress.account}'
                   '${progress.page > 0 ? ' · ${l10n.t('pagePrefix')} ${progress.page + 1}' : ''}',
-                  style: TextStyle(fontSize: 12, color: colors.text2),
+                  style: AppTextStyle.caption1
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
               Text(
                 '${l10n.t('totalN')} ${fmtInt(progress.inserted)}',
-                style: TextStyle(fontSize: 11, color: colors.text3),
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
           const SizedBox(height: 9),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: const LinearProgressIndicator(minHeight: 4),
-          ),
+          LinearProgressIndicator(minHeight: 5),
         ],
       ),
     );

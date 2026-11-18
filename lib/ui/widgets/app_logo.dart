@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.size = 56});
@@ -7,7 +7,7 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(size * 0.24);
+    final radius = BorderRadius.circular(size * 0.26);
     return Container(
       width: size,
       height: size,

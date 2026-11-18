@@ -2,17 +2,39 @@ QuotaRoom
 =========
 
 QuotaRoom (Chinese: 额度空间) is an Android and Windows desktop Flutter port
-and rebrand of GoGauge:
+and rebrand of GoGauge.
+
+  QuotaRoom v2.3.0 and later: GNU General Public License v3.0
+  QuotaRoom v2.2.0 and earlier: MIT License
+
+Upstream GoGauge code:
 
   GoGauge (opencode-go-gauge)
   Copyright (c) 2026 GoGauge (yphyphyph)
   https://github.com/yphyphyph/opencode-go-gauge
   Licensed under the MIT License.
 
+The FlClash-style UI is derived from FlClash and prism_ui:
+
+  FlClash
+  Copyright (c) chen08209 and contributors
+  https://github.com/chen08209/FlClash
+  Licensed under GPL-3.0.
+
+  prism_ui
+  Copyright (c) chen08209 and contributors
+  https://github.com/chen08209/prism_ui
+  Licensed under GPL-3.0.
+
+The GPL-3.0 text is in LICENSE. The upstream MIT text, FlClash/prism_ui
+attribution and other dependency notices are in THIRD_PARTY_NOTICES.md, which
+is also bundled as assets/LICENSE in the app.
+
 QuotaRoom is a community project and is not an official release from the
-upstream author. The upstream Python Windows desktop application is a separate
-project and is not included in this repository; the Windows client here is an
-independent Flutter implementation sharing QuotaRoom's codebase.
+GoGauge, FlClash or OpenCode authors. The upstream Python Windows desktop
+application is a separate project and is not included in this repository; the
+Windows client here is an independent Flutter implementation sharing
+QuotaRoom's codebase.
 
 A pre-rebrand GoGauge Mobile build (package com.gogauge.gogauge_mobile) was
 published at https://github.com/StarryCognet/gogauge-mobile. QuotaRoom uses a
@@ -22,8 +44,9 @@ Rebranding and changes:
 - New product name "QuotaRoom" / "额度空间", package id
   com.starrycognet.quotaroom, and an original capacity-tank app icon
   (a tank with a liquid level; the empty space above is the "room").
-- UI rewritten with Flutter/Dart (bottom navigation on mobile, a wide-screen
-  navigation rail on desktop, charts, light/dark themes, Chinese/English UI).
+- UI rewritten with Flutter/Dart. v2.3.0 adopts a FlClash-style prism_ui shell:
+  a collapsible desktop sidebar, a floating mobile dock, continuous corners,
+  tinted surfaces and a bento dashboard.
 - opencode.ai console API client, quota parsing, SQLite aggregations and the
   incremental/full sync cursor logic ported from Python to Dart.
 - Android in-app WebView login with a native CookieManager bridge for the
@@ -35,10 +58,8 @@ Rebranding and changes:
   Windows toast notifications and desktop save dialogs.
 - Added an extra `created_ms` column so date/hour bucketing does not depend on
   SQLite's ISO-8601 timezone parsing.
-- Bundled MIT license viewer inside the app (About -> Open Source Licenses).
-
-The MIT license text and the upstream copyright notice are preserved in the
-LICENSE file, which is also bundled as assets/LICENSE in the APK.
+- Bundled license and third-party notices viewer inside the app
+  (About -> Open Source Licenses).
 
 Trademarks:
 - "OpenCode", "OpenCode Go" and the model names/logos shown in the app
