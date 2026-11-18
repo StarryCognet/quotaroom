@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../core/platform.dart';
 import '../state/app_state.dart' show AppState;
 import 'account_repository.dart';
 import 'app_database.dart';
@@ -19,6 +20,17 @@ import 'widget_service.dart';
 
 const String backgroundSyncTask = 'quotaroom.backgroundSync';
 const String backgroundSyncUnique = 'quotaroom.periodicSync';
+
+/// Registers the WorkManager dispatcher on Android. Desktop relies on the
+/// in-app timer in `AppState` instead, so this is a no-op there.
+Future<void> initBackgroundSync() async {
+  if (!supportsAndroidIntegrations) return;
+  try {
+    await Workmanager().initialize(backgroundSyncDispatcher);
+  } catch (e) {
+    debugPrint('QuotaRoom WorkManager init failed: $e');
+  }
+}
 
 /// WorkManager entry point. Runs in a background Flutter isolate; plugin
 /// registration is provided by the WorkManager engine.
@@ -38,6 +50,7 @@ void backgroundSyncDispatcher() {
 /// Syncs all signed-in accounts, then refreshes quota, notifications and the
 /// home-screen widget. Safe to call from a background isolate.
 Future<void> runBackgroundSync() async {
+  if (!supportsAndroidIntegrations) return;
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
 
@@ -118,6 +131,7 @@ class BackgroundSyncScheduler {
     required bool enabled,
     required int syncIntervalSec,
   }) async {
+    if (!supportsAndroidIntegrations) return;
     try {
       if (!enabled) {
         await Workmanager().cancelByUniqueName(backgroundSyncUnique);

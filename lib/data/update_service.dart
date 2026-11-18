@@ -14,6 +14,8 @@ class UpdateInfo {
     required this.notes,
     this.apkUrl,
     this.apkSize = 0,
+    this.windowsUrl,
+    this.windowsSize = 0,
   });
 
   final String current;
@@ -23,8 +25,12 @@ class UpdateInfo {
   final String notes;
   final String? apkUrl;
   final int apkSize;
+  final String? windowsUrl;
+  final int windowsSize;
 
   bool get hasApk => apkUrl != null && apkUrl!.isNotEmpty;
+
+  bool get hasWindowsPackage => windowsUrl != null && windowsUrl!.isNotEmpty;
 }
 
 class UpdateService {
@@ -60,15 +66,24 @@ class UpdateService {
 
     String? apkUrl;
     var apkSize = 0;
+    String? windowsUrl;
+    var windowsSize = 0;
     final assets = data['assets'];
     if (assets is List) {
       for (final asset in assets) {
         if (asset is! Map) continue;
         final name = (asset['name'] ?? '').toString().toLowerCase();
-        if (!name.endsWith('.apk')) continue;
-        apkUrl = (asset['browser_download_url'] ?? '').toString();
-        apkSize = (asset['size'] as num?)?.toInt() ?? 0;
-        break;
+        final downloadUrl = (asset['browser_download_url'] ?? '').toString();
+        final size = (asset['size'] as num?)?.toInt() ?? 0;
+        if (apkUrl == null && name.endsWith('.apk')) {
+          apkUrl = downloadUrl;
+          apkSize = size;
+        } else if (windowsUrl == null &&
+            name.endsWith('.zip') &&
+            name.contains('windows')) {
+          windowsUrl = downloadUrl;
+          windowsSize = size;
+        }
       }
     }
 
@@ -80,6 +95,8 @@ class UpdateService {
       notes: cleanNotes(rawNotes),
       apkUrl: apkUrl,
       apkSize: apkSize,
+      windowsUrl: windowsUrl,
+      windowsSize: windowsSize,
     );
   }
 

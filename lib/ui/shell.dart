@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
 
 import '../core/formatters.dart';
+import '../core/platform.dart';
 import '../core/theme.dart';
 import '../state/app_state.dart';
 import 'pages/accounts_page.dart';
@@ -68,6 +70,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _setupQuickActions(AppState state) async {
+    if (!supportsAndroidIntegrations) return;
     const quickActions = QuickActions();
     try {
       if (!_quickActionsReady) {
@@ -102,16 +105,27 @@ class _AppShellState extends State<AppShell> {
     final state = context.read<AppState>();
     switch (type) {
       case 'sync':
-        setState(() => _index = 0);
+        _selectTab(0);
         unawaited(_quickSync(state));
         break;
       case 'stats':
-        setState(() => _index = 1);
+        _selectTab(1);
         break;
       case 'records':
-        setState(() => _index = 2);
+        _selectTab(2);
         break;
     }
+  }
+
+  void _selectTab(int index) {
+    if (!mounted || index == _index) return;
+    setState(() => _index = index);
+  }
+
+  void _refreshShortcut() {
+    final state = context.read<AppState>();
+    if (state.syncing) return;
+    unawaited(_manualSync());
   }
 
   Future<void> _quickSync(AppState state) async {
@@ -154,7 +168,35 @@ class _AppShellState extends State<AppShell> {
             _ => colors.text3,
           };
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return PopScope(
+    final wide = isDesktop && MediaQuery.sizeOf(context).width >= 840;
+    final tabs = <({String label, IconData icon, IconData selected})>[
+      (
+        label: l10n.t('home'),
+        icon: Icons.space_dashboard_outlined,
+        selected: Icons.space_dashboard_rounded,
+      ),
+      (
+        label: l10n.t('stats'),
+        icon: Icons.bar_chart_rounded,
+        selected: Icons.insert_chart_rounded,
+      ),
+      (
+        label: l10n.t('recordsTab'),
+        icon: Icons.receipt_long_outlined,
+        selected: Icons.receipt_long_rounded,
+      ),
+      (
+        label: l10n.t('accountsTab'),
+        icon: Icons.manage_accounts_outlined,
+        selected: Icons.manage_accounts_rounded,
+      ),
+      (
+        label: l10n.t('settingsTab'),
+        icon: Icons.settings_outlined,
+        selected: Icons.settings_rounded,
+      ),
+    ];
+    final content = PopScope(
       canPop: _index == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _index != 0) {
@@ -241,45 +283,70 @@ class _AppShellState extends State<AppShell> {
         ),
         body: SafeArea(
           top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 980),
-              child: IndexedStack(index: _index, children: _pages),
-            ),
+          child: Row(
+            children: [
+              if (wide)
+                NavigationRail(
+                  selectedIndex: _index,
+                  onDestinationSelected: _selectTab,
+                  labelType: NavigationRailLabelType.all,
+                  minWidth: 78,
+                  groupAlignment: -0.85,
+                  destinations: [
+                    for (final tab in tabs)
+                      NavigationRailDestination(
+                        icon: Icon(tab.icon),
+                        selectedIcon: Icon(tab.selected),
+                        label: Text(tab.label),
+                      ),
+                  ],
+                ),
+              if (wide) const VerticalDivider(width: 1, thickness: 1),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: wide ? 1240 : 980),
+                    child: IndexedStack(index: _index, children: _pages),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (value) => setState(() => _index = value),
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.space_dashboard_outlined),
-              selectedIcon: const Icon(Icons.space_dashboard_rounded),
-              label: l10n.t('home'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.bar_chart_rounded),
-              selectedIcon: const Icon(Icons.insert_chart_rounded),
-              label: l10n.t('stats'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.receipt_long_outlined),
-              selectedIcon: const Icon(Icons.receipt_long_rounded),
-              label: l10n.t('recordsTab'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.manage_accounts_outlined),
-              selectedIcon: const Icon(Icons.manage_accounts_rounded),
-              label: l10n.t('accountsTab'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.settings_outlined),
-              selectedIcon: const Icon(Icons.settings_rounded),
-              label: l10n.t('settingsTab'),
-            ),
-          ],
-        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: _selectTab,
+                destinations: [
+                  for (final tab in tabs)
+                    NavigationDestination(
+                      icon: Icon(tab.icon),
+                      selectedIcon: Icon(tab.selected),
+                      label: tab.label,
+                    ),
+                ],
+              ),
       ),
+    );
+    if (!isDesktop) return content;
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true): () =>
+            _selectTab(0),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true): () =>
+            _selectTab(1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true): () =>
+            _selectTab(2),
+        const SingleActivator(LogicalKeyboardKey.digit4, control: true): () =>
+            _selectTab(3),
+        const SingleActivator(LogicalKeyboardKey.digit5, control: true): () =>
+            _selectTab(4),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+            _refreshShortcut,
+        const SingleActivator(LogicalKeyboardKey.f5): _refreshShortcut,
+      },
+      child: Focus(autofocus: true, child: content),
     );
   }
 

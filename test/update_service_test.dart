@@ -38,6 +38,31 @@ void main() {
     expect(info.notes, isEmpty);
   });
 
+  test('release payload picks the Windows portable zip', () {
+    final info = UpdateService.parseRelease({
+      'tag_name': 'v2.2.0',
+      'html_url':
+          'https://github.com/StarryCognet/quotaroom/releases/tag/v2.2.0',
+      'body': 'Desktop support',
+      'assets': [
+        {
+          'name': 'QuotaRoom-v2.2.0-windows-x64.zip',
+          'size': 24117248,
+          'browser_download_url': 'https://github.com/StarryCognet/quotaroom/releases/download/v2.2.0/QuotaRoom-v2.2.0-windows-x64.zip',
+        },
+        {
+          'name': 'QuotaRoom-v2.2.0.apk',
+          'size': 61846511,
+          'browser_download_url': 'https://github.com/StarryCognet/quotaroom/releases/download/v2.2.0/QuotaRoom-v2.2.0.apk',
+        },
+      ],
+    }, current: '2.1.1');
+    expect(info.hasWindowsPackage, isTrue);
+    expect(info.windowsUrl, endsWith('QuotaRoom-v2.2.0-windows-x64.zip'));
+    expect(info.windowsSize, 24117248);
+    expect(info.hasApk, isTrue);
+  });
+
   test('cleanNotes removes markdown while keeping bullets', () {
     final cleaned = UpdateService.cleanNotes(
       '### 标题\n\n- **一**\n- [链接](https://example.com)\n`code`',

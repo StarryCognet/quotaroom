@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../data/export_service.dart';
 import '../../data/models.dart';
@@ -298,6 +303,31 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  /// Desktop has no share sheet for files: let the user pick a destination
+  /// instead. Mobile keeps the existing share flow.
+  Future<void> _saveOrShare(
+    BuildContext context, {
+    required File file,
+    required String shareText,
+  }) async {
+    final state = context.read<AppState>();
+    final l10n = state.l10n;
+    final service = ExportService(db: state.db.db, usage: state.usageRepo);
+    if (!isDesktop) {
+      await service.shareFile(file, text: shareText);
+      return;
+    }
+    final location = await getSaveLocation(
+      suggestedName: p.basename(file.path),
+    );
+    if (location == null) return;
+    await file.copy(location.path);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.t('savedTo', {'path': location.path}))),
+    );
+  }
+
   Future<void> _exportRecords(BuildContext context) async {
     final state = context.read<AppState>();
     final account = state.activeAccount;
@@ -306,9 +336,11 @@ class SettingsPage extends StatelessWidget {
     try {
       final service = ExportService(db: state.db.db, usage: state.usageRepo);
       final file = await service.exportRecordsCsv(account.id, state.keyNames);
-      await service.shareFile(
-        file,
-        text: 'QuotaRoom · ${account.name} records',
+      if (!context.mounted) return;
+      await _saveOrShare(
+        context,
+        file: file,
+        shareText: 'QuotaRoom · ${account.name} records',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -326,9 +358,11 @@ class SettingsPage extends StatelessWidget {
     try {
       final service = ExportService(db: state.db.db, usage: state.usageRepo);
       final file = await service.exportKeysCsv(account.id, state.keyNames);
-      await service.shareFile(
-        file,
-        text: 'QuotaRoom · ${account.name} key summary',
+      if (!context.mounted) return;
+      await _saveOrShare(
+        context,
+        file: file,
+        shareText: 'QuotaRoom · ${account.name} key summary',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -344,7 +378,12 @@ class SettingsPage extends StatelessWidget {
     try {
       final service = ExportService(db: state.db.db, usage: state.usageRepo);
       final file = await service.backupDatabase();
-      await service.shareFile(file, text: 'QuotaRoom database backup');
+      if (!context.mounted) return;
+      await _saveOrShare(
+        context,
+        file: file,
+        shareText: 'QuotaRoom database backup',
+      );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
@@ -433,10 +472,18 @@ class SettingsPage extends StatelessWidget {
       'https://github.com/StarryCognet/quotaroom',
     ];
     try {
+      final text = lines.join('\n');
+      if (isDesktop) {
+        await Clipboard.setData(ClipboardData(text: text));
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('copiedToClipboard'))));
+        return;
+      }
       await ExportService(
         db: state.db.db,
         usage: state.usageRepo,
-      ).shareText(lines.join('\n'));
+      ).shareText(text);
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(

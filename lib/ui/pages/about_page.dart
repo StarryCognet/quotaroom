@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/platform.dart';
 import '../../core/theme.dart';
 import '../../state/app_state.dart';
 import '../widgets/app_logo.dart';
@@ -53,7 +54,7 @@ class AboutPage extends StatelessWidget {
                   ? '${snapshot.data!.version} (${snapshot.data!.buildNumber})'
                   : '1.0.0';
               return Text(
-                '${l10n.t('version')} $version',
+                '${l10n.t('version')} $version · $platformLabel',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, color: colors.text3),
               );

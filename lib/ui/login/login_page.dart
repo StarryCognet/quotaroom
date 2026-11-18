@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/platform.dart';
 import '../../core/theme.dart';
+import '../../data/opencode_api.dart';
 import '../../state/app_state.dart';
 import '../widgets/app_logo.dart';
 import 'login_webview_page.dart';
@@ -29,6 +32,29 @@ class _LoginPageState extends State<LoginPage> {
     ).push<String>(MaterialPageRoute(builder: (_) => const LoginWebViewPage()));
     if (token == null || !mounted) return;
     await _finishLogin(token);
+  }
+
+  /// Desktop has no embedded WebView: open the console in the system browser,
+  /// then let the user paste the session cookie straight from dev tools.
+  Future<void> _openBrowserLogin() async {
+    final l10n = context.read<AppState>().l10n;
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse(OpenCodeApi.loginUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      opened = false;
+    }
+    if (!mounted) return;
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.t('desktopOpenBrowserFailed'))),
+      );
+      return;
+    }
+    await _openPasteCookie();
   }
 
   Future<void> _openPasteCookie() async {
@@ -74,6 +100,7 @@ class _LoginPageState extends State<LoginPage> {
     final l10n = state.l10n;
     final colors = context.colors;
     final media = MediaQuery.of(context);
+    final desktop = isDesktop;
     return Scaffold(
       appBar: widget.asRoute
           ? AppBar(
@@ -164,26 +191,56 @@ class _LoginPageState extends State<LoginPage> {
                           text: l10n.t('welcomeFeat3'),
                         ),
                         const SizedBox(height: 30),
-                        FilledButton.icon(
-                          onPressed: _busy ? null : _openWebLogin,
-                          icon: const Icon(Icons.login_rounded, size: 19),
-                          label: Text(l10n.t('loginBtn')),
-                        ),
-                        const SizedBox(height: 6),
-                        TextButton(
-                          onPressed: _busy ? null : _openPasteCookie,
-                          child: Text(l10n.t('pasteCookie')),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          l10n.t('loginNote'),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.6,
-                            color: colors.text3,
+                        if (desktop) ...[
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _openBrowserLogin,
+                            icon: const Icon(
+                              Icons.open_in_browser_rounded,
+                              size: 19,
+                            ),
+                            label: Text(l10n.t('desktopLoginBtn')),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _openPasteCookie,
+                            icon: const Icon(
+                              Icons.keyboard_alt_outlined,
+                              size: 18,
+                            ),
+                            label: Text(l10n.t('pasteCookie')),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            l10n.t('desktopLoginNote'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              height: 1.6,
+                              color: colors.text3,
+                            ),
+                          ),
+                        ] else ...[
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _openWebLogin,
+                            icon: const Icon(Icons.login_rounded, size: 19),
+                            label: Text(l10n.t('loginBtn')),
+                          ),
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: _busy ? null : _openPasteCookie,
+                            child: Text(l10n.t('pasteCookie')),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            l10n.t('loginNote'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              height: 1.6,
+                              color: colors.text3,
+                            ),
+                          ),
+                        ],
                         if (media.padding.bottom > 0) const SizedBox(height: 8),
                       ],
                     ),

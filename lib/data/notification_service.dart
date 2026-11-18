@@ -3,10 +3,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/formatters.dart';
+import '../core/platform.dart';
 import 'models.dart';
 
-/// Local quota / budget alerts. Everything stays on-device; the service only
-/// turns already-synced values into Android notifications.
+/// Local quota / budget alerts. Everything stays on-device; the service turns
+/// already-synced values into Android or Windows notifications.
 class NotificationService {
   NotificationService();
 
@@ -31,11 +32,16 @@ class NotificationService {
 
   Future<void> init() async {
     if (_initialized) return;
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!supportsLocalNotifications) return;
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
           android: AndroidInitializationSettings('ic_stat_quotaroom'),
+          windows: WindowsInitializationSettings(
+            appName: 'QuotaRoom',
+            appUserModelId: 'com.starrycognet.quotaroom',
+            guid: '6f0d8c2a-4c1e-4f8b-9d3a-2b7e5c1a9f04',
+          ),
         ),
       );
       _initialized = true;
@@ -49,6 +55,9 @@ class NotificationService {
   Future<bool> requestPermission() async {
     await init();
     if (!_initialized) return false;
+    // Windows toasts are gated by the system notification setting and show no
+    // runtime permission prompt.
+    if (defaultTargetPlatform == TargetPlatform.windows) return true;
     try {
       final android = _plugin
           .resolvePlatformSpecificImplementation<
@@ -65,6 +74,7 @@ class NotificationService {
   Future<bool> areEnabled() async {
     await init();
     if (!_initialized) return false;
+    if (defaultTargetPlatform == TargetPlatform.windows) return true;
     try {
       final android = _plugin
           .resolvePlatformSpecificImplementation<
@@ -178,7 +188,10 @@ class NotificationService {
         id: key.hashCode & 0x7fffffff,
         title: title,
         body: body,
-        notificationDetails: NotificationDetails(android: _details),
+        notificationDetails: NotificationDetails(
+          android: _details,
+          windows: const WindowsNotificationDetails(),
+        ),
       );
       seen.add(key);
       if (seen.length > 120) {

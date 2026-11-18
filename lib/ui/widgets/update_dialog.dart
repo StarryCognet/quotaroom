@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/i18n.dart';
+import '../../core/platform.dart';
 import '../../data/apk_installer.dart';
 import '../../data/update_service.dart';
 import '../../state/app_state.dart';
@@ -48,6 +49,25 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   bool get _busy =>
       _phase == _UpdatePhase.downloading || _phase == _UpdatePhase.installing;
 
+  /// Android can install the APK in-app; desktop downloads the portable zip or
+  /// opens the release page in the browser.
+  bool get _canInstall => ApkInstaller.isSupported && widget.info.hasApk;
+
+  int get _sizeBytes {
+    if (_canInstall) return widget.info.apkSize;
+    if (isWindows && widget.info.hasWindowsPackage) {
+      return widget.info.windowsSize;
+    }
+    return 0;
+  }
+
+  String get _downloadUrl {
+    final info = widget.info;
+    if (isWindows && info.hasWindowsPackage) return info.windowsUrl!;
+    if (info.releaseUrl.isNotEmpty) return info.releaseUrl;
+    return info.apkUrl ?? '';
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -82,12 +102,10 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   }
 
   Future<void> _primaryAction() async {
-    if (!widget.info.hasApk) {
-      if (widget.info.releaseUrl.isNotEmpty) {
-        await launchUrl(
-          Uri.parse(widget.info.releaseUrl),
-          mode: LaunchMode.externalApplication,
-        );
+    if (!_canInstall) {
+      final url = _downloadUrl;
+      if (url.isNotEmpty) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       }
       return;
     }
@@ -160,9 +178,9 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     final colors = Theme.of(context).colorScheme;
     final info = widget.info;
     final notes = info.notes.isEmpty ? l10n.t('updateNotesEmpty') : info.notes;
-    final sizeLabel = info.apkSize > 0
+    final sizeLabel = _sizeBytes > 0
         ? l10n.t('updateApkSize', {
-            'size': (info.apkSize / (1024 * 1024)).toStringAsFixed(1),
+            'size': (_sizeBytes / (1024 * 1024)).toStringAsFixed(1),
           })
         : null;
     return PopScope(
@@ -200,6 +218,19 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                               color: colors.onSurfaceVariant,
                             ),
                           ),
+                          if (!_canInstall &&
+                              isWindows &&
+                              info.hasWindowsPackage) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.t('updateWindowsHint'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                height: 1.5,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           Text(
                             l10n.t('releaseNotes'),
@@ -359,14 +390,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         FilledButton.icon(
           onPressed: _primaryAction,
           icon: Icon(
-            widget.info.hasApk
+            _canInstall
                 ? Icons.file_download_outlined
                 : Icons.open_in_new_rounded,
             size: 17,
           ),
-          label: Text(
-            widget.info.hasApk ? l10n.t('updateNow') : l10n.t('goDownload'),
-          ),
+          label: Text(_canInstall ? l10n.t('updateNow') : l10n.t('goDownload')),
         ),
       ],
     );

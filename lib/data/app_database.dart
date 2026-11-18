@@ -1,5 +1,8 @@
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+
+import '../core/platform.dart';
 
 String nowIso() => DateTime.now().toUtc().toIso8601String();
 
@@ -16,7 +19,7 @@ class AppDatabase {
     DatabaseFactory? factory,
   }) async {
     final f = factory ?? databaseFactory;
-    final dbPath = path ?? p.join(await getDatabasesPath(), 'quotaroom.db');
+    final dbPath = path ?? await defaultPath();
     final database = await f.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
@@ -32,6 +35,17 @@ class AppDatabase {
     final result = AppDatabase._(database);
     await result._seed();
     return result;
+  }
+
+  /// Android keeps the database in sqflite's app databases directory; desktop
+  /// uses the per-user application support directory (%APPDATA% on Windows).
+  static Future<String> defaultPath() async {
+    if (isDesktop) {
+      final directory = await getApplicationSupportDirectory();
+      await directory.create(recursive: true);
+      return p.join(directory.path, 'quotaroom.db');
+    }
+    return p.join(await getDatabasesPath(), 'quotaroom.db');
   }
 
   static Future<void> _createSchema(Database db) async {

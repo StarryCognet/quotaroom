@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -16,9 +17,10 @@ import 'package:quotaroom/data/token_store.dart';
 import 'package:quotaroom/data/usage_repository.dart';
 import 'package:quotaroom/state/app_state.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:workmanager/workmanager.dart';
+import 'package:quotaroom/core/platform.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Developer-only entry point: seeds a month of demo data so every page can be
 /// inspected without a real opencode.ai account.
@@ -27,12 +29,17 @@ import 'package:workmanager/workmanager.dart';
 ///   flutter run -t tool/preview.dart -d `device`
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Workmanager().initialize(backgroundSyncDispatcher);
-  } catch (_) {
-    // Preview on desktop: WorkManager is Android-only.
+  if (isDesktop) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  } else {
+    await initBackgroundSync();
   }
-  final path = p.join(await getDatabasesPath(), 'quotaroom_preview.db');
+  final directory = isDesktop
+      ? await getApplicationSupportDirectory()
+      : Directory(await getDatabasesPath());
+  await directory.create(recursive: true);
+  final path = p.join(directory.path, 'quotaroom_preview.db');
   await deleteDatabase(path);
   final database = await AppDatabase.open(path: path);
   final api = _DemoApi();
@@ -85,10 +92,7 @@ Future<void> main() async {
   );
   unawaited(state.init());
   runApp(
-    ChangeNotifierProvider.value(
-      value: state,
-      child: const QuotaRoomApp(),
-    ),
+    ChangeNotifierProvider.value(value: state, child: const QuotaRoomApp()),
   );
 }
 
@@ -108,8 +112,11 @@ Future<void> _seed(UsageRepository repo, int accountId) async {
   final records = <UsageRecord>[];
   var sequence = 0;
   for (var dayOffset = 29; dayOffset >= 0; dayOffset--) {
-    final day = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: dayOffset));
+    final day = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: dayOffset));
     final count = dayOffset == 0
         ? max(3, now.hour + 1)
         : 5 + random.nextInt(12);

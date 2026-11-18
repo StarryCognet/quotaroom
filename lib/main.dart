@@ -2,9 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:workmanager/workmanager.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'app.dart';
+import 'core/platform.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
 import 'data/background_sync.dart';
@@ -19,10 +20,12 @@ import 'state/app_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Workmanager().initialize(backgroundSyncDispatcher);
-  } catch (e) {
-    debugPrint('QuotaRoom WorkManager init failed: $e');
+  if (isDesktop) {
+    // Desktop has no sqflite plugin; route every database call through FFI.
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  } else {
+    await initBackgroundSync();
   }
   try {
     final database = await AppDatabase.open();
