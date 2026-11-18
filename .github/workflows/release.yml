@@ -98,8 +98,15 @@ jobs:
       - name: Build Windows desktop
         run: flutter build windows --release
 
-      - name: Install packaging tools
-        run: choco install innosetup 7zip -y --no-progress
+      - name: Check packaging tools
+        shell: pwsh
+        run: |
+          $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $sevenZip)) { throw "7-Zip not found at $sevenZip" }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup not found at $iscc" }
+          Write-Host "Using $sevenZip"
+          Write-Host "Using $iscc"
 
       - name: Package portable, installer and single-file
         shell: pwsh
