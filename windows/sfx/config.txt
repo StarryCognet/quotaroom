@@ -1,0 +1,6 @@
+;!@Install@!UTF-8!
+Title="QuotaRoom __VERSION__"
+BeginPrompt="启动 / Run QuotaRoom __VERSION__? 首次启动会先解压运行文件，可能需要几秒钟 / First launch extracts files and may take a few seconds."
+RunProgram="QuotaRoom.exe"
+Progress="yes"
+;!@InstallEnd@!

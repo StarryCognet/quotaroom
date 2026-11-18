@@ -39,7 +39,9 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
 - 从 v2.2.0 起，每个 Release 同时提供：
   - `QuotaRoom-v2.2.0.apk`：Android 7.0+ 安装包
-  - `QuotaRoom-v2.2.0-windows-x64.zip`：Windows 10/11 x64 免安装便携版
+  - `QuotaRoom-v2.2.0-windows-x64-setup.exe`：Windows 安装版
+  - `QuotaRoom-v2.2.0-windows-x64.zip`：Windows 免安装便携版
+  - `QuotaRoom-v2.2.0-windows-x64-single.exe`：Windows 单文件自解压版
   - `SHA256SUMS.txt` / `SHA256SUMS-windows.txt`：校验和
 
 > APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。Windows 版解压即用，更新时解压覆盖原目录即可。
@@ -96,7 +98,7 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 
 ### Windows 桌面端
 
-- 免安装便携版，解压运行 `QuotaRoom.exe`
+- 三种分发形态：安装版 `setup.exe`、便携版 zip、单文件 `single.exe`
 - 窗口宽度 ≥ 840px 时自动切换左侧导航栏，内容区最大 1240px 居中
 - `Ctrl+1…5` 切换首页 / 统计 / 记录 / 账号 / 设置，`Ctrl+R` / `F5` 立即同步
 - 系统浏览器打开 opencode.ai，登录后粘贴 `__Host-console_session`
@@ -125,17 +127,24 @@ adb install -r QuotaRoom-v2.2.0.apk
 
 ### Windows
 
-1. 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 `QuotaRoom-v2.2.0-windows-x64.zip`；
-2. 解压到任意目录（不要只把 exe 单独拿出来，需保留同目录的 DLL 与 `data/` 文件夹）；
-3. 运行 `QuotaRoom.exe`。
+从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 任选一种：
 
-要求：Windows 10/11 x64。便携版无需安装；卸载时删除解压目录即可。更新时下载新 zip 并解压覆盖原目录。为了实现 Windows Toast，应用会在当前用户注册表登记 AppUserModelId（`HKCU\Software\Classes\AppUserModelId`）。
+| 形态 | 文件 | 使用方式 |
+| --- | --- | --- |
+| 安装版 | `QuotaRoom-v2.2.0-windows-x64-setup.exe` | 双击安装，默认装到 `%LOCALAPPDATA%\Programs\QuotaRoom`，创建开始菜单 / 可选桌面快捷方式，可在「应用和功能」卸载；不需要管理员权限 |
+| 便携版 | `QuotaRoom-v2.2.0-windows-x64.zip` | 解压到任意目录，运行 `QuotaRoom.exe`；更新时解压覆盖 |
+| 单文件 | `QuotaRoom-v2.2.0-windows-x64-single.exe` | 只有一个 exe，双击后先自解压到临时目录再启动；首次启动可能多等几秒 |
+
+要求：Windows 10/11 x64。三种形态共用 `%APPDATA%\StarryCognet\QuotaRoom` 下的数据库和凭证，切换形态不会丢数据。安装版卸载不会删除这份用户数据。
+
+> Windows 可执行文件暂未做代码签名，SmartScreen 可能提示「未知发布者」，可选择「更多信息 → 仍要运行」。为了实现 Windows Toast，应用会在当前用户注册表登记 AppUserModelId（`HKCU\Software\Classes\AppUserModelId`）。
 
 从源码构建时，产物位于：
 
 ```
 build/app/outputs/flutter-apk/app-release.apk      # Android
-build/windows/x64/runner/Release/QuotaRoom.exe     # Windows
+build/windows/x64/runner/Release/QuotaRoom.exe     # Windows 原始构建
+dist/QuotaRoom-<version>-windows-x64-*.zip/.exe    # Windows 三种分发形态
 ```
 
 ## 登录
@@ -186,7 +195,7 @@ flutter build apk --release
 
 ### Windows
 
-需要 Visual Studio Build Tools（Windows 10/11 SDK +「使用 C++ 的桌面开发」+ **ATL** 组件）。
+需要 Visual Studio Build Tools（Windows 10/11 SDK +「使用 C++ 的桌面开发」+ **ATL** 组件）。打安装版还需要 [Inno Setup 6+](https://jrsoftware.org/isdl.php)，打单文件版需要 [7-Zip](https://www.7-zip.org/)。
 
 ```bash
 flutter pub get
@@ -194,9 +203,29 @@ flutter analyze
 flutter test
 dart run tool/windows_plugin_links.dart   # 仅在未开启开发者模式时需要
 flutter build windows --release
+
+# 生成三种分发形态到 dist/
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0
 ```
 
-产物：`build/windows/x64/runner/Release/QuotaRoom.exe`（整个 `Release` 目录一起分发）。
+也可以只打某一种：
+
+```bash
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.2.0 -SkipSingleFile
+```
+
+产物：
+
+```
+build/windows/x64/runner/Release/QuotaRoom.exe          # Flutter 原始构建
+dist/QuotaRoom-2.2.0-windows-x64-setup.exe              # 安装版
+dist/QuotaRoom-2.2.0-windows-x64.zip                    # 便携版
+dist/QuotaRoom-2.2.0-windows-x64-single.exe             # 单文件版
+dist/SHA256SUMS-windows.txt                             # 三者校验和
+```
+
+打包脚本自动查找 Inno Setup 和 7-Zip；装在非默认路径时用 `-Iscc <ISCC.exe>` / `-SevenZip <7z.exe>` 指定。
 
 > Flutter 在 Windows 上通过符号链接引用插件。开启「设置 → 开发者选项 → 开发人员模式」后 Flutter 会自动创建；未开启时先运行 `tool/windows_plugin_links.dart`，它用目录联接（junction）完成同样的工作。若终端里有全局 `CL` 环境变量，构建前请临时移除，避免 MSVC 参数被污染。
 
@@ -224,8 +253,11 @@ lib/
   ui/              登录、导航、图表、开源许可页与通用组件
 android/           MainActivity 中的 HttpOnly Cookie 原生桥
 windows/           Windows runner（QuotaRoom.exe、图标、版本信息）
+  installer/       Inno Setup 安装版脚本与简体中文语言文件
+  sfx/             7-Zip SFX 单文件配置与 LZMA SDK 模块
 tool/preview.dart  仅开发用的演示数据入口
 tool/windows_plugin_links.dart  无开发者模式时的 Windows 插件目录联接
+tool/package_windows.ps1        生成 zip / setup.exe / single.exe 三种形态
 test/              API 解析、聚合口径、同步引擎、更新解析测试
 assets/
   icon/            QuotaRoom 容量罐图标（PNG + 源 SVG）
@@ -245,6 +277,7 @@ assets/
 - `flutter analyze`：无问题
 - `flutter test`：43 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、Key 聚合、分页、去重、裁剪、增量游标、配额缓存、更新附件解析）
 - `flutter build windows --release`：构建成功，生成 `QuotaRoom.exe`
+- `tool/package_windows.ps1`：便携 zip、Inno Setup 安装包、单文件 SFX 均构建成功；安装包已实测静默安装、开始菜单 / 卸载入口、启动与卸载清理；单文件已实测解压启动并在退出后清理临时目录
 - Windows 实机验证：启动、浏览器登录 + Cookie 回填、Windows 凭据存储、FFI SQLite 建库、首次全量同步、首页 / 宽屏导航 / 图表 / 浅色主题
 - Windows Toast 通知初始化无报错；桌面「另存为」导出、剪贴板摘要与按平台分流的更新流程已实现
 - Android：v2.1.1 的登录、WebView、五个 Tab、Key 用量、滑到底加载、深色模式、中英切换、模型筛选、开源许可页均已在 Android 15 x86_64 模拟器实测；v2.2.0 的 Android 构建由 CI 继续覆盖
@@ -254,7 +287,9 @@ assets/
 - Windows 不使用内置 WebView 登录，需要系统浏览器 + 粘贴 Cookie；这是 Windows 上没有等价 HttpOnly Cookie 桥的取舍。
 - 桌面端自动同步在应用运行期间生效；关闭窗口后不会常驻托盘或后台同步（尚未实现系统托盘）。
 - Windows Toast 在未打包为 MSIX 的情况下可以显示，但系统不允许应用取消已弹出的通知或读取通知历史。
-- 桌面端应用内更新目前打开 Release 附件（浏览器下载 zip），不做静默替换；解压覆盖原目录即可。
+- Windows 可执行文件暂未做代码签名，SmartScreen 可能提示「未知发布者」；安装版、便携版、单文件版都如此。
+- 桌面端应用内更新目前下载便携版 zip；安装版 / 单文件版用户也可以到 Release 页面选择对应附件。更新不做静默替换。
+- 单文件版是自解压启动器，首次启动需要先解压 Flutter 运行时（约 30 MB），因此比便携版慢几秒；它不是真正的单二进制 Flutter 应用。
 - 登录仍是最脆弱环节：opencode.ai 改登录页或 Cookie 策略时需要同步调整；粘贴 Cookie 兜底始终可用。
 - 官方明细接口只保留 30 天，超过 30 天的数据只能依赖本机历史累积。
 - macOS / Linux 尚未提供构建产物；Flutter 代码中的平台分支已预留，但未做发布验证。
@@ -263,8 +298,8 @@ assets/
 
 - 用量数据保存在本机 SQLite：Android 应用数据库目录；Windows `%APPDATA%\StarryCognet\QuotaRoom\quotaroom.db`。
 - 会话 Cookie：Android 使用 `flutter_secure_storage`（Android Keystore）；Windows 使用 Windows 凭据管理器保存密钥 + AES-GCM 加密文件。
-- 除 opencode.ai 官方接口与汇率接口 `open.er-api.com` 外，不向任何第三方发送数据。
-- Android 已关闭自动备份（避免恢复后 Keystore 解密失败）；Windows 便携版无需安装，删除解压目录与 `%APPDATA%\StarryCognet\QuotaRoom` 即可清除本地数据。Windows Toast 会在 `HKCU` 下登记 AppUserModelId，不涉及系统级修改。
+- 除 opencode.ai 官方接口、汇率接口 `open.er-api.com` 和 GitHub Release 更新检查外，不向任何第三方发送数据；更新检查只读取版本信息。
+- Android 已关闭自动备份（避免恢复后 Keystore 解密失败）；Windows 安装版 / 便携版 / 单文件版共用 `%APPDATA%\StarryCognet\QuotaRoom`，删除安装目录与该数据目录即可清除本地数据（安装版卸载不会自动删数据）。单文件版只在启动时把运行时解压到系统临时目录，退出后自动清理。Windows Toast 会在 `HKCU` 下登记 AppUserModelId，不涉及系统级修改。
 - 桌面端导出的 CSV / 备份文件只写入你选择的路径，不包含登录凭证。
 
 ## 开源许可

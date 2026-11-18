@@ -98,20 +98,11 @@ jobs:
       - name: Build Windows desktop
         run: flutter build windows --release
 
-      - name: Package portable zip and checksum
+      - name: Package portable, installer and single-file
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $zip = "dist/QuotaRoom-v$version-windows-x64.zip"
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath $zip -Force
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-          $name = Split-Path $zip -Leaf
-          [IO.File]::WriteAllText(
-            "dist/SHA256SUMS-windows.txt",
-            "$hash  $name`n",
-            [Text.Encoding]::ASCII
-          )
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version $version
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
