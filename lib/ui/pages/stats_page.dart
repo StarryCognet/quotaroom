@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../state/app_state.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
+import '../widgets/skeleton.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -27,7 +28,7 @@ class _StatsPageState extends State<StatsPage> {
     final colors = context.colors;
     if (data == null) {
       return state.loadingDashboard
-          ? const Center(child: CircularProgressIndicator())
+          ? const DashboardSkeleton()
           : EmptyState(
               icon: Icons.bar_chart_rounded,
               title: l10n.t('noData'),

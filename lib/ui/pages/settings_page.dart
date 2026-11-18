@@ -975,9 +975,11 @@ class _UpdateRowState extends State<_UpdateRow> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.t('updateFailed')}: $e')));
+      final message = e.toString().contains('403')
+          ? l10n.t('updateRateLimited')
+          : '${l10n.t('updateFailed')}: $e';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

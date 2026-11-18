@@ -13,10 +13,8 @@ class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   static const _projectUrl = 'https://github.com/StarryCognet/quotaroom';
-  static const _issuesUrl =
-      'https://github.com/StarryCognet/quotaroom/issues';
-  static const _upstreamUrl =
-      'https://github.com/yphyphyph/opencode-go-gauge';
+  static const _issuesUrl = 'https://github.com/StarryCognet/quotaroom/issues';
+  static const _upstreamUrl = 'https://github.com/yphyphyph/opencode-go-gauge';
   static const _openCodeUrl = 'https://opencode.ai';
 
   @override
@@ -85,6 +83,10 @@ class AboutPage extends StatelessWidget {
                   'feat3',
                   'feat4',
                   'feat5',
+                  'feat6',
+                  'feat7',
+                  'feat8',
+                  'feat9',
                 ])
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -130,6 +132,8 @@ class AboutPage extends StatelessWidget {
                       'SQLite',
                       'fl_chart',
                       'WebView',
+                      'WorkManager',
+                      'home_widget',
                       'opencode /console/api',
                     ])
                       Container(
@@ -143,10 +147,7 @@ class AboutPage extends StatelessWidget {
                         ),
                         child: Text(
                           tech,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: colors.text2,
-                          ),
+                          style: TextStyle(fontSize: 10.5, color: colors.text2),
                         ),
                       ),
                   ],
@@ -233,15 +234,13 @@ class AboutPage extends StatelessWidget {
         mode: LaunchMode.externalApplication,
       );
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('loadFailed'))),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('loadFailed'))));
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.t('loadFailed')}: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${l10n.t('loadFailed')}: $e')));
     }
   }
 }
@@ -290,11 +289,7 @@ class _LinkRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.open_in_new_rounded,
-              size: 16,
-              color: colors.text3,
-            ),
+            Icon(Icons.open_in_new_rounded, size: 16, color: colors.text3),
           ],
         ),
       ),

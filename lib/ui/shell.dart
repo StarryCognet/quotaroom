@@ -218,7 +218,12 @@ class _AppShellState extends State<AppShell> {
         ),
         body: SafeArea(
           top: false,
-          child: IndexedStack(index: _index, children: _pages),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980),
+              child: IndexedStack(index: _index, children: _pages),
+            ),
+          ),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,

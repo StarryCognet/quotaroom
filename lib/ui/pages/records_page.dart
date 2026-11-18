@@ -10,6 +10,7 @@ import '../../data/models.dart';
 import '../../state/app_state.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
+import '../widgets/skeleton.dart';
 
 class KeyFilterSelection {
   const KeyFilterSelection({required this.keyId, required this.keyName});
@@ -320,7 +321,7 @@ class _SessionsTabState extends State<_SessionsTab> {
     final l10n = state.l10n;
     final colors = context.colors;
     if (_loading && _items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ListSkeleton();
     }
     if (_error != null && _items.isEmpty) {
       return ErrorState(
@@ -803,7 +804,7 @@ class _RecordsTabState extends State<_RecordsTab> {
     final l10n = state.l10n;
     final colors = context.colors;
     if (_loading && _items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ListSkeleton();
     }
     if (_error != null && _items.isEmpty) {
       return ErrorState(
@@ -1189,7 +1190,7 @@ class _KeyTabState extends State<_KeyTab> {
     final l10n = state.l10n;
     final colors = context.colors;
     if (_loading && _stats.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ListSkeleton(rows: 3, rowHeight: 190);
     }
     if (_error != null) {
       return ErrorState(

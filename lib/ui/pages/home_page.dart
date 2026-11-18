@@ -8,6 +8,7 @@ import '../../state/app_state.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
 import '../widgets/quota_card.dart';
+import '../widgets/skeleton.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -19,7 +20,7 @@ class HomePage extends StatelessWidget {
     final data = state.dashboard;
     if (data == null) {
       return state.loadingDashboard
-          ? const Center(child: CircularProgressIndicator())
+          ? const DashboardSkeleton()
           : EmptyState(
               icon: Icons.dashboard_outlined,
               title: l10n.t('noData'),
@@ -83,8 +84,7 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () =>
-                        state.refreshDashboard(forceQuota: true),
+                    onPressed: () => state.refreshDashboard(forceQuota: true),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       minimumSize: const Size(0, 30),
@@ -106,10 +106,7 @@ class HomePage extends StatelessWidget {
           ),
           if (state.settings.dailyBudgetUsd != null) ...[
             const SizedBox(height: 10),
-            _DailyBudgetCard(
-              state: state,
-              todayCost: data.today.totalCostUsd,
-            ),
+            _DailyBudgetCard(state: state, todayCost: data.today.totalCostUsd),
           ],
           const SizedBox(height: 14),
           Text(
@@ -177,7 +174,8 @@ class _KpiGrid extends StatelessWidget {
       KpiCard(
         label: l10n.t('hitRate'),
         value: '${totals.hitRate.toStringAsFixed(1)}%',
-        sub: '${l10n.t('hit')} ${fmtTokens(totals.cacheHitTokens)} · ${l10n.t('miss')} ${fmtTokens(totals.uncachedInputTokens)}',
+        sub:
+            '${l10n.t('hit')} ${fmtTokens(totals.cacheHitTokens)} · ${l10n.t('miss')} ${fmtTokens(totals.uncachedInputTokens)}',
         color: colors.green,
         valueColor: colors.green,
         icon: Icons.bolt_rounded,
@@ -243,16 +241,8 @@ class _DailyBudgetCard extends StatelessWidget {
         : (ratio >= 0.8 ? colors.amber : colors.green);
     final remaining = budget - todayCost;
     final status = over
-        ? '${l10n.t('budgetOver')} ${fmtMoney(
-            -remaining,
-            currency: state.currency,
-            rate: state.usdCny,
-          )}'
-        : '${l10n.t('remaining')} ${fmtMoney(
-            remaining,
-            currency: state.currency,
-            rate: state.usdCny,
-          )}';
+        ? '${l10n.t('budgetOver')} ${fmtMoney(-remaining, currency: state.currency, rate: state.usdCny)}'
+        : '${l10n.t('remaining')} ${fmtMoney(remaining, currency: state.currency, rate: state.usdCny)}';
     return AppCard(
       padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
       child: Column(
@@ -298,20 +288,12 @@ class _DailyBudgetCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                '${l10n.t('budgetUsed')} ${fmtMoney(
-                  todayCost,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                )}',
+                '${l10n.t('budgetUsed')} ${fmtMoney(todayCost, currency: state.currency, rate: state.usdCny)}',
                 style: TextStyle(fontSize: 10.5, color: colors.text3),
               ),
               const Spacer(),
               Text(
-                '${l10n.t('dailyBudget')} ${fmtMoney(
-                  budget,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                )}',
+                '${l10n.t('dailyBudget')} ${fmtMoney(budget, currency: state.currency, rate: state.usdCny)}',
                 style: TextStyle(fontSize: 10.5, color: colors.text3),
               ),
             ],
