@@ -1,5 +1,8 @@
+#include <algorithm>
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <shellapi.h>
+#include <shobjidl_core.h>
 #include <windows.h>
 
 #include "flutter_window.h"
@@ -16,15 +19,47 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  ::SetCurrentProcessExplicitAppUserModelID(L"com.starrycognet.quotaroom");
+
+  // Single instance: a second launch (e.g. autostart + manual click) should
+  // focus the existing hidden window instead of opening another database and
+  // sync timer.
+  HANDLE single_instance_mutex = ::CreateMutexW(
+      nullptr, TRUE, L"QuotaRoom.SingleInstance");
+  if (single_instance_mutex != nullptr &&
+      ::GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND existing = nullptr;
+    for (int attempt = 0; attempt < 30 && existing == nullptr; ++attempt) {
+      existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"QuotaRoom");
+      if (existing == nullptr) ::Sleep(100);
+    }
+    if (existing != nullptr) {
+      // SW_RESTORE also reveals a window hidden by close-to-tray.
+      ::ShowWindow(existing, SW_RESTORE);
+      ::SetForegroundWindow(existing);
+    }
+    ::CloseHandle(single_instance_mutex);
+    return EXIT_SUCCESS;
+  }
 
   flutter::DartProject project(L"data");
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  const bool start_hidden =
+      std::find(command_line_arguments.begin(), command_line_arguments.end(),
+                "--hidden") != command_line_arguments.end();
+  if (start_hidden) {
+    // Dart reads this even if executableArguments does not include entrypoint
+    // args on a release build.
+    ::SetEnvironmentVariableW(L"QUOTAROOM_START_HIDDEN", L"1");
+  }
+
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
+  window.SetStartHidden(start_hidden);
   constexpr int kWindowWidth = 1280;
   constexpr int kWindowHeight = 860;
   const int screen_width = ::GetSystemMetrics(SM_CXSCREEN);
@@ -46,6 +81,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
+  if (single_instance_mutex != nullptr) {
+    ::ReleaseMutex(single_instance_mutex);
+    ::CloseHandle(single_instance_mutex);
+  }
   ::CoUninitialize();
   return EXIT_SUCCESS;
 }

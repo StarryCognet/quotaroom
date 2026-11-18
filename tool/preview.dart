@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:quotaroom/app.dart';
+import 'package:quotaroom/core/desktop_shell.dart';
 import 'package:quotaroom/data/account_repository.dart';
 import 'package:quotaroom/data/app_database.dart';
 import 'package:quotaroom/data/background_sync.dart';
@@ -34,6 +35,11 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   } else {
     await initBackgroundSync();
+  }
+  try {
+    await DesktopShell.instance.initialize();
+  } catch (error) {
+    debugPrint('QuotaRoom preview desktop shell init failed: $error');
   }
   final directory = isDesktop
       ? await getApplicationSupportDirectory()

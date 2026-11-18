@@ -1,9 +1,27 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
 
 import 'app_database.dart';
 import 'models.dart';
 import 'settings_repository.dart';
 import 'token_store.dart';
+
+/// Thrown when a re-login cookie belongs to a different workspace. The caller
+/// can offer to add it as a separate account instead of mixing histories.
+class WorkspaceChangedException implements Exception {
+  const WorkspaceChangedException({
+    required this.currentWorkspaceId,
+    required this.nextWorkspaceId,
+  });
+
+  final String currentWorkspaceId;
+  final String nextWorkspaceId;
+
+  @override
+  String toString() =>
+      'workSpace changed: $currentWorkspaceId -> $nextWorkspaceId';
+}
 
 class AccountRepository {
   AccountRepository({
@@ -15,6 +33,17 @@ class AccountRepository {
   final Database db;
   final TokenStore tokens;
   final SettingsRepository settings;
+
+  Future<void> _writeQueue = Future<void>.value();
+
+  /// Serializes addAccount so two quick login submissions cannot create
+  /// duplicate rows for the same token/workspace pair.
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final completer = Completer<void>();
+    final previous = _writeQueue;
+    _writeQueue = completer.future;
+    return previous.then((_) => action()).whenComplete(completer.complete);
+  }
 
   Future<List<Account>> listAccounts() async {
     final rows = await db.query('accounts', orderBy: 'id ASC');
@@ -94,55 +123,79 @@ class AccountRepository {
     );
   }
 
-  /// Adds an account, or returns an existing account holding the same token.
+  /// Adds an account, or returns an existing account with the same token AND
+  /// workspace. The same cookie used for a different workspace creates a new
+  /// account row so their usage histories never mix.
   Future<Account> addAccount({
     required String token,
     required String workspaceId,
     String? name,
     bool setActive = true,
-  }) async {
-    final normalized = token.trim();
-    final existingAccounts = await listAccounts();
-    for (final account in existingAccounts) {
-      final existing = await tokens.read(account.id);
-      if (existing != null && existing.trim() == normalized) {
-        await saveWorkspace(
-          account.id,
-          hint: workspaceId,
-          resolved: workspaceId,
-        );
+  }) {
+    return _serialized(() async {
+      final normalized = token.trim();
+      final workspace = workspaceId.trim().isEmpty
+          ? 'Default'
+          : workspaceId.trim();
+      final existingAccounts = await listAccounts();
+      var tokenAlreadyExists = false;
+      for (final account in existingAccounts) {
+        final existingToken = await tokens.read(account.id);
+        if (existingToken == null || existingToken.trim() != normalized) {
+          continue;
+        }
+        tokenAlreadyExists = true;
+        final existingWorkspace =
+            account.resolvedWorkspaceId ?? account.workspaceHint;
+        if (existingWorkspace != workspace) continue;
+        // Same identity: refresh the workspace hint and optional name.
+        await saveWorkspace(account.id, hint: workspace, resolved: workspace);
+        if (name != null && name.trim().isNotEmpty) {
+          await rename(account.id, name.trim());
+        }
         if (setActive) await this.setActive(account.id);
         return (await getAccount(account.id))!;
       }
-    }
-    // Fresh install / re-login of the only account: fill the seeded empty row
-    // instead of leaving an unused "Default" account next to the real one.
-    if (existingAccounts.length == 1 && !existingAccounts.single.hasToken) {
-      final only = existingAccounts.single;
-      await tokens.write(only.id, normalized);
-      await saveWorkspace(only.id, hint: workspaceId, resolved: workspaceId);
-      if (name != null && name.trim().isNotEmpty) {
-        await rename(only.id, name.trim());
+      // Fresh install / re-login of the only account: fill the seeded empty
+      // row instead of leaving an unused "Default" account next to the real
+      // one. This is only safe when there is no token yet.
+      if (existingAccounts.length == 1 && !existingAccounts.single.hasToken) {
+        final only = existingAccounts.single;
+        await tokens.write(only.id, normalized);
+        await saveWorkspace(only.id, hint: workspace, resolved: workspace);
+        if (name != null && name.trim().isNotEmpty) {
+          await rename(only.id, name.trim());
+        }
+        if (setActive) await this.setActive(only.id);
+        return (await getAccount(only.id))!;
       }
-      if (setActive) await this.setActive(only.id);
-      return (await getAccount(only.id))!;
-    }
-    final count =
-        Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM accounts'),
-        ) ??
-        0;
-    final now = nowIso();
-    final id = await db.insert('accounts', {
-      'name': (name ?? '').trim().isEmpty ? 'User ${count + 1}' : name!.trim(),
-      'workspace_id': workspaceId.isEmpty ? 'Default' : workspaceId,
-      'resolved_workspace_id': workspaceId.isEmpty ? null : workspaceId,
-      'created_at': now,
-      'updated_at': now,
+      final count =
+          Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM accounts'),
+          ) ??
+          0;
+      final now = nowIso();
+      final trimmedName = (name ?? '').trim();
+      final fallbackName = tokenAlreadyExists
+          ? 'Workspace ${count + 1}'
+          : 'User ${count + 1}';
+      final id = await db.insert('accounts', {
+        'name': trimmedName.isEmpty ? fallbackName : trimmedName,
+        'workspace_id': workspace,
+        'resolved_workspace_id': workspace == 'Default' ? null : workspace,
+        'created_at': now,
+        'updated_at': now,
+      });
+      try {
+        await tokens.write(id, normalized);
+        if (setActive) await this.setActive(id);
+      } catch (_) {
+        // A failed credential write must not leave an unusable account row.
+        await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
+        rethrow;
+      }
+      return (await getAccount(id))!;
     });
-    await tokens.write(id, normalized);
-    if (setActive) await this.setActive(id);
-    return (await getAccount(id))!;
   }
 
   Future<bool> rename(int accountId, String name) async {

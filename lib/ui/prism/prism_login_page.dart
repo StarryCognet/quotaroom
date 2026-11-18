@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/platform.dart';
+import '../../data/account_repository.dart';
 import '../../data/opencode_api.dart';
 import '../../state/app_state.dart';
 import '../login/login_webview_page.dart';
+import '../widgets/dialogs.dart';
 import 'app_glyphs.dart';
 import 'paste_cookie_sheet.dart';
 import 'prism_route.dart';
@@ -25,6 +27,7 @@ class PrismLoginPage extends StatefulWidget {
 
 class _PrismLoginPageState extends State<PrismLoginPage> {
   bool _busy = false;
+  bool _lastAuthFailure = false;
 
   Future<void> _openWebLogin() async {
     final token = await Navigator.of(context).push<String>(
@@ -56,13 +59,28 @@ class _PrismLoginPageState extends State<PrismLoginPage> {
 
   Future<void> _openPasteCookie() async {
     final state = context.read<AppState>();
-    final token = await showPasteCookieSheet(context, state.l10n);
-    if (token == null || !mounted) return;
-    await _finishLogin(token);
+    var initial = '';
+    String? error;
+    while (mounted) {
+      final token = await showPasteCookieSheet(
+        context,
+        state.l10n,
+        initialText: initial,
+        errorText: error,
+      );
+      if (token == null || !mounted) return;
+      final ok = await _finishLogin(token);
+      if (ok || !mounted || !_lastAuthFailure) return;
+      // Keep the invalid cookie in the field instead of discarding what the
+      // user pasted and forcing them to copy it again.
+      initial = token;
+      error = state.l10n.t('pasteCookieInvalid');
+    }
   }
 
-  Future<void> _finishLogin(String token) async {
+  Future<bool> _finishLogin(String token) async {
     final state = context.read<AppState>();
+    _lastAuthFailure = false;
     setState(() => _busy = true);
     try {
       if (widget.relogin) {
@@ -70,20 +88,54 @@ class _PrismLoginPageState extends State<PrismLoginPage> {
       } else {
         await state.addAccountWithToken(token);
       }
-      if (!mounted) return;
-      if (widget.asRoute) {
-        Navigator.of(context).pop();
-      } else {
-        BannerHost.maybeOf(context)
-            ?.show(state.l10n.t('loginSuccess'), level: BannerLevel.success);
-      }
+      if (!mounted) return true;
+      _afterLoginSuccess(state);
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
+      if (e is WorkspaceChangedException && widget.relogin) {
+        final add = await showConfirmDialog(
+          context,
+          title: state.l10n.t('workspaceChangedTitle'),
+          message: state.l10n.t('workspaceChangedBody', {
+            'current': e.currentWorkspaceId,
+            'next': e.nextWorkspaceId,
+          }),
+          cancelLabel: state.l10n.t('cancel'),
+          confirmLabel: state.l10n.t('workspaceAsNewAccount'),
+        );
+        if (!add || !mounted) return false;
+        try {
+          await state.addAccountWithToken(token);
+          if (!mounted) return true;
+          _afterLoginSuccess(state);
+          return true;
+        } catch (e2) {
+          if (!mounted) return false;
+          BannerHost.maybeOf(context)?.show(
+            '${state.l10n.t('loginFailed')}: $e2',
+            level: BannerLevel.error,
+          );
+          return false;
+        }
+      }
+      _lastAuthFailure = e is AuthException;
       BannerHost.maybeOf(
         context,
       )?.show('${state.l10n.t('loginFailed')}: $e', level: BannerLevel.error);
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _afterLoginSuccess(AppState state) {
+    if (!mounted) return;
+    if (widget.asRoute) {
+      Navigator.of(context).pop();
+    } else {
+      BannerHost.maybeOf(context)
+          ?.show(state.l10n.t('loginSuccess'), level: BannerLevel.success);
     }
   }
 
@@ -229,6 +281,21 @@ class _PrismLoginPageState extends State<PrismLoginPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
             child: Center(child: card),
+          ),
+        ),
+        // Settings (and its language switch) is unreachable before login, so
+        // expose a direct toggle here for first-run and expired-session users.
+        Positioned(
+          top: 6,
+          right: 10,
+          child: SafeArea(
+            child: TextButton(
+              onPressed: _busy
+                  ? null
+                  : () =>
+                        state.setLanguage(state.language == 'en' ? 'zh' : 'en'),
+              child: Text(state.language == 'en' ? '中文' : 'English'),
+            ),
           ),
         ),
         if (_busy) ...[

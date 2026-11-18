@@ -32,37 +32,52 @@ Future<void> main() async {
     exitCode = 1;
     return;
   }
-  final plugins = (decoded['plugins'] as Map?)?['windows'];
-  if (plugins is! List) {
-    stdout.writeln('windows_plugin_links: no Windows plugins registered.');
+  final pluginMap = decoded['plugins'];
+  if (pluginMap is! Map) {
+    stdout.writeln('windows_plugin_links: no plugins registered.');
     return;
   }
-  final linkDirectory = Directory(
-    p.join(root.path, 'windows', 'flutter', 'ephemeral', '.plugin_symlinks'),
-  )..createSync(recursive: true);
+  final targets = <String, String>{
+    'windows': p.join('windows', 'flutter', 'ephemeral', '.plugin_symlinks'),
+    'linux': p.join('linux', 'flutter', 'ephemeral', '.plugin_symlinks'),
+    'macos': p.join('macos', 'Flutter', 'ephemeral', '.plugin_symlinks'),
+  };
 
   var failures = 0;
-  for (final entry in plugins) {
-    if (entry is! Map) continue;
-    final name = entry['name'];
-    final target = entry['path'];
-    if (name is! String || target is! String) continue;
-    final link = Link(p.join(linkDirectory.path, name));
-    if (link.existsSync()) continue;
-    final result = Process.runSync('cmd', [
-      '/c',
-      'mklink',
-      '/J',
-      _winPath(link.path),
-      _winPath(target),
-    ], runInShell: true);
-    if (result.exitCode != 0) {
-      failures++;
-      stderr.writeln('Failed to link $name: ${result.stderr}');
-    } else {
-      stdout.writeln('Linked $name');
+  var created = 0;
+  for (final entry in targets.entries) {
+    final platform = entry.key;
+    final plugins = pluginMap[platform];
+    if (plugins is! List) continue;
+    // On a Windows checkout, Flutter creates symlinks for every platform
+    // directory that exists, including Linux/macOS. Junctions satisfy that
+    // check without Developer Mode.
+    final linkDirectory = Directory(p.join(root.path, entry.value))
+      ..createSync(recursive: true);
+    for (final plugin in plugins) {
+      if (plugin is! Map) continue;
+      final name = plugin['name'];
+      final target = plugin['path'];
+      if (name is! String || target is! String) continue;
+      final link = Link(p.join(linkDirectory.path, name));
+      if (link.existsSync()) continue;
+      final result = Process.runSync('cmd', [
+        '/c',
+        'mklink',
+        '/J',
+        _winPath(link.path),
+        _winPath(target),
+      ], runInShell: true);
+      if (result.exitCode != 0) {
+        failures++;
+        stderr.writeln('Failed to link $platform/$name: ${result.stderr}');
+      } else {
+        created++;
+        stdout.writeln('Linked $platform/$name');
+      }
     }
   }
+  stdout.writeln('Created $created plugin links.');
   if (failures > 0) {
     exitCode = 1;
   } else {

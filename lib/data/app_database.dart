@@ -23,12 +23,40 @@ class AppDatabase {
     final database = await f.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 3,
         onConfigure: (db) async {
           await db.execute('PRAGMA foreign_keys = ON');
+          // The foreground app and Android's WorkManager isolate can open the
+          // same file at once. Wait for writers instead of failing instantly.
+          await db.execute('PRAGMA busy_timeout = 5000');
+          try {
+            await db.execute('PRAGMA journal_mode = WAL');
+          } catch (_) {
+            // In-memory factories and some older Android SQLite builds reject
+            // WAL; the default journal still works, just with less concurrency.
+          }
         },
         onCreate: (db, version) async {
           await _createSchema(db);
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute(
+              "ALTER TABLE usage_records ADD COLUMN origin TEXT NOT NULL DEFAULT 'sync'",
+            );
+          }
+          if (oldVersion < 3) {
+            await db.execute(
+              'ALTER TABLE usage_sync_state ADD COLUMN last_success_at TEXT',
+            );
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS sync_lease (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                owner TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+              )
+            ''');
+          }
         },
       ),
     );
@@ -78,6 +106,7 @@ class AppDatabase {
         key_id TEXT,
         session_id TEXT,
         plan TEXT,
+        origin TEXT NOT NULL DEFAULT 'sync',
         synced_at TEXT NOT NULL
       )
     ''');
@@ -91,6 +120,7 @@ class AppDatabase {
       CREATE TABLE usage_sync_state (
         account_id INTEGER PRIMARY KEY,
         last_sync_at TEXT,
+        last_success_at TEXT,
         last_sync_status TEXT,
         last_sync_error TEXT,
         last_inserted_count INTEGER NOT NULL DEFAULT 0,
@@ -105,6 +135,13 @@ class AppDatabase {
         id INTEGER PRIMARY KEY CHECK (id = 1),
         payload TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE sync_lease (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        owner TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
       )
     ''');
   }

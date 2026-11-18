@@ -184,6 +184,13 @@ class OpenCodeApi {
           );
         }
         if (code >= 200 && code < 300) return response;
+        if (code >= 400 &&
+            code < 500 &&
+            code != 408 &&
+            code != 425 &&
+            code != 429) {
+          throw OpenCodeApiException('请求返回 HTTP $code', retryable: false);
+        }
         lastError = OpenCodeApiException('请求返回 HTTP $code');
       } on AuthException {
         rethrow;
@@ -391,6 +398,7 @@ class OpenCodeApi {
   static UsagePage parseRequestLogs(Map<String, Object?> payload) {
     final items = payload['items'];
     final records = <UsageRecord>[];
+    final rawItemCount = items is List ? items.length : 0;
     if (items is List) {
       for (final item in items) {
         if (item is! Map) continue;
@@ -436,6 +444,7 @@ class OpenCodeApi {
       records: records,
       nextCursor: cursor == null || cursor.isEmpty ? null : cursor,
       retentionDays: retention == null ? null : _asInt(retention),
+      rawItemCount: rawItemCount,
     );
   }
 

@@ -14,8 +14,10 @@ import '../pages/accounts_page.dart';
 import '../pages/records_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/stats_page.dart';
+import '../widgets/page_frame.dart';
 import '../widgets/update_dialog.dart';
 import 'app_glyphs.dart';
+import 'global_search.dart';
 import 'keep_alive_page.dart';
 import 'prism_home_page.dart';
 
@@ -35,6 +37,7 @@ class _PrismShellState extends State<PrismShell>
   bool _sidebarExpanded = true;
   bool _quickActionsReady = false;
   String? _shortcutLanguage;
+  AppState? _navState;
 
   List<Widget> get _pages => const [
     PrismHomePage(),
@@ -60,6 +63,7 @@ class _PrismShellState extends State<PrismShell>
     super.initState();
     _tabsController = TabController(length: 5, vsync: this);
     _tabsController.addListener(_onTabsChanged);
+    HardwareKeyboard.instance.addHandler(_handleGlobalKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_autoCheckUpdate());
     });
@@ -71,8 +75,21 @@ class _PrismShellState extends State<PrismShell>
     setState(() {});
   }
 
+  bool _handleGlobalKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    final keyboard = HardwareKeyboard.instance;
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        (keyboard.isControlPressed || keyboard.isMetaPressed)) {
+      unawaited(_openSearch());
+      return true;
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKey);
+    _navState?.recordsNavigation.removeListener(_onRecordsNavigation);
     _tabsController.dispose();
     super.dispose();
   }
@@ -81,10 +98,25 @@ class _PrismShellState extends State<PrismShell>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final state = context.read<AppState>();
+    if (!identical(_navState, state)) {
+      _navState?.recordsNavigation.removeListener(_onRecordsNavigation);
+      _navState = state;
+      state.recordsNavigation.addListener(_onRecordsNavigation);
+    }
     if (_shortcutLanguage != state.language) {
       _shortcutLanguage = state.language;
       unawaited(_setupQuickActions(state));
     }
+  }
+
+  void _onRecordsNavigation() {
+    final request = _navState?.recordsNavigation.value;
+    if (request != null) _selectTab(2);
+  }
+
+  Future<void> _openSearch() async {
+    final state = context.read<AppState>();
+    await showGlobalSearch(context, state);
   }
 
   Future<void> _autoCheckUpdate() async {
@@ -162,9 +194,13 @@ class _PrismShellState extends State<PrismShell>
     final banner = BannerHost.maybeOf(context);
     banner?.show(
       result.ok
-          ? '${l10n.t('syncDone')} · +${result.inserted}'
+          ? (result.partial
+                ? l10n.t('syncPartial')
+                : '${l10n.t('syncDone')} · +${result.inserted}')
           : '${l10n.t('syncFailed')}: ${result.error ?? ''}',
-      level: result.ok ? BannerLevel.success : BannerLevel.error,
+      level: result.ok && !result.partial
+          ? BannerLevel.success
+          : BannerLevel.error,
     );
   }
 
@@ -180,7 +216,7 @@ class _PrismShellState extends State<PrismShell>
     final index = _tabsController.index;
     final sync = state.dashboard?.sync;
     final lastSync = fmtRelative(
-      sync?.lastSyncAt,
+      sync?.lastSuccessOrAttempt,
       never: l10n.t('never'),
       justNow: l10n.t('justNow'),
       minAgo: l10n.t('minAgo'),
@@ -241,6 +277,11 @@ class _PrismShellState extends State<PrismShell>
             ),
             actions: [
               IconButton(
+                onPressed: _openSearch,
+                tooltip: l10n.t('globalSearch'),
+                icon: const GlyphIcon(AppGlyphs.search, size: 21),
+              ),
+              IconButton(
                 onPressed: state.syncing ? null : _sync,
                 tooltip: l10n.t('refresh'),
                 icon: state.syncing
@@ -262,7 +303,10 @@ class _PrismShellState extends State<PrismShell>
       body: TabBarView(
         controller: _tabsController,
         physics: const NeverScrollableScrollPhysics(),
-        children: [for (final page in _pages) KeepAlivePage(child: page)],
+        children: [
+          for (final page in _pages)
+            KeepAlivePage(child: PageFrame(child: page)),
+        ],
       ),
     );
 

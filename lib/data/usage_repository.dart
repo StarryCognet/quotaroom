@@ -80,9 +80,12 @@ class UsageRepository {
     final cutoff = DateTime.now()
         .subtract(Duration(days: days))
         .millisecondsSinceEpoch;
+    // Rows imported through "restore" are an explicit user recovery action;
+    // they must not disappear on the next auto-sync just because they are
+    // older than the sync window.
     return db.delete(
       'usage_records',
-      where: 'account_id = ? AND created_ms < ?',
+      where: "account_id = ? AND created_ms < ? AND origin != 'restore'",
       whereArgs: [accountId, cutoff],
     );
   }
@@ -91,7 +94,12 @@ class UsageRepository {
     return totalsBetween(accountId, fromMs: fromMsForPeriod(period));
   }
 
-  Future<Totals> totalsBetween(int accountId, {int? fromMs, int? toMs}) async {
+  Future<Totals> totalsBetween(
+    int accountId, {
+    int? fromMs,
+    int? toMs,
+    String? model,
+  }) async {
     final where = <String>['account_id = ?'];
     final args = <Object?>[accountId];
     if (fromMs != null) {
@@ -101,6 +109,10 @@ class UsageRepository {
     if (toMs != null) {
       where.add('created_ms < ?');
       args.add(toMs);
+    }
+    if (model != null && model.isNotEmpty) {
+      where.add('model = ?');
+      args.add(model);
     }
     final rows = await db.rawQuery("""
       SELECT COUNT(*) AS request_count,
@@ -120,17 +132,74 @@ class UsageRepository {
     return _totalsFromRow(rows.isEmpty ? const {} : rows.first);
   }
 
+  Future<List<DailyStat>> modelDailyStats(
+    int accountId,
+    String model,
+    int days,
+  ) async {
+    final clamped = days.clamp(1, 365).toInt();
+    final rows = await db.rawQuery(
+      '''
+      SELECT date(created_ms / 1000, 'unixepoch', 'localtime') AS date,
+             SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
+                 + cache_write_1h_tokens) AS total_input_tokens,
+             SUM(input_tokens) AS uncached_input_tokens,
+             SUM(reasoning_tokens) AS total_reasoning_tokens,
+             SUM(cache_read_tokens) AS cache_hit_tokens,
+             SUM(cache_write_5m_tokens + cache_write_1h_tokens) AS cache_write_tokens,
+             SUM(output_tokens) AS total_output_tokens,
+             SUM(cost_usd) AS total_cost_usd,
+             COUNT(*) AS request_count
+      FROM usage_records
+      WHERE account_id = ?
+        AND model = ?
+        AND date(created_ms / 1000, 'unixepoch', 'localtime')
+            >= date('now', 'localtime', ?)
+      GROUP BY date
+      ORDER BY date ASC
+    ''',
+      [accountId, model, '-${clamped - 1} days'],
+    );
+    return rows.map((row) {
+      final hit = _int(row['cache_hit_tokens']);
+      final miss = _int(row['uncached_input_tokens']);
+      return DailyStat(
+        date: (row['date'] ?? '').toString(),
+        totalInputTokens: _int(row['total_input_tokens']),
+        uncachedInputTokens: miss,
+        totalReasoningTokens: _int(row['total_reasoning_tokens']),
+        cacheHitTokens: hit,
+        cacheWriteTokens: _int(row['cache_write_tokens']),
+        totalOutputTokens: _int(row['total_output_tokens']),
+        totalCostUsd: _double(row['total_cost_usd']),
+        requestCount: _int(row['request_count']),
+        hitRate: _hitRate(hit, miss),
+      );
+    }).toList();
+  }
+
   Future<List<ModelKeyStat>> modelKeyStats(
     int accountId,
     String period, {
     int limit = 5,
+    String? model,
+    int? rangeFromMs,
+    int? rangeToMs,
   }) async {
-    final fromMs = fromMsForPeriod(period);
+    final fromMs = rangeFromMs ?? fromMsForPeriod(period);
     final where = <String>['account_id = ?'];
     final args = <Object?>[accountId];
     if (fromMs != null) {
       where.add('created_ms >= ?');
       args.add(fromMs);
+    }
+    if (rangeToMs != null) {
+      where.add('created_ms < ?');
+      args.add(rangeToMs);
+    }
+    if (model != null && model.isNotEmpty) {
+      where.add('model = ?');
+      args.add(model);
     }
     final rows = await db.rawQuery(
       """
@@ -163,13 +232,19 @@ class UsageRepository {
     int accountId,
     String period, {
     int limit = 5,
+    int? rangeFromMs,
+    int? rangeToMs,
   }) async {
-    final fromMs = fromMsForPeriod(period);
+    final fromMs = rangeFromMs ?? fromMsForPeriod(period);
     final where = <String>['account_id = ?'];
     final args = <Object?>[accountId];
     if (fromMs != null) {
       where.add('created_ms >= ?');
       args.add(fromMs);
+    }
+    if (rangeToMs != null) {
+      where.add('created_ms < ?');
+      args.add(rangeToMs);
     }
     final rows = await db.rawQuery(
       """
@@ -183,13 +258,22 @@ class UsageRepository {
     return rows.map(UsageRecord.fromDbMap).toList();
   }
 
-  Future<List<ModelStat>> modelStats(int accountId, String period) async {
-    final fromMs = fromMsForPeriod(period);
+  Future<List<ModelStat>> modelStats(
+    int accountId,
+    String period, {
+    int? rangeFromMs,
+    int? rangeToMs,
+  }) async {
+    final fromMs = rangeFromMs ?? fromMsForPeriod(period);
     final where = StringBuffer('account_id = ?');
     final args = <Object?>[accountId];
     if (fromMs != null) {
       where.write(' AND created_ms >= ?');
       args.add(fromMs);
+    }
+    if (rangeToMs != null) {
+      where.write(' AND created_ms < ?');
+      args.add(rangeToMs);
     }
     final rows = await db.rawQuery('''
       SELECT model,
@@ -250,7 +334,7 @@ class UsageRepository {
       GROUP BY date
       ORDER BY date ASC
     ''',
-      [accountId, '-$clamped days'],
+      [accountId, '-${clamped - 1} days'],
     );
     return rows.map((row) {
       final hit = _int(row['cache_hit_tokens']);
@@ -308,6 +392,7 @@ class UsageRepository {
     String? model,
     int? days,
     String? keyId,
+    String? sessionId,
     String? query,
   }) async {
     final currentPage = page < 1 ? 1 : page;
@@ -332,11 +417,17 @@ class UsageRepository {
         args.add(keyId);
       }
     }
+    if (sessionId != null && sessionId.isNotEmpty) {
+      where.add('session_id = ?');
+      args.add(sessionId);
+    }
     final search = (query ?? '').trim();
     if (search.isNotEmpty) {
       final like = '%$search%';
-      where.add('(session_id LIKE ? OR key_id LIKE ? OR model LIKE ?)');
-      args.addAll([like, like, like]);
+      where.add(
+        '(usg_id LIKE ? OR session_id LIKE ? OR key_id LIKE ? OR model LIKE ?)',
+      );
+      args.addAll([like, like, like, like]);
     }
     final whereSql = where.join(' AND ');
     final total =
@@ -361,11 +452,50 @@ class UsageRepository {
     );
   }
 
-  Future<List<UsageRecord>> allRecords(int accountId) async {
+  Future<List<UsageRecord>> allRecords(
+    int accountId, {
+    String? model,
+    int? days,
+    String? keyId,
+    String? sessionId,
+    String? query,
+  }) async {
+    final where = <String>['account_id = ?'];
+    final args = <Object?>[accountId];
+    if (model != null && model.isNotEmpty) {
+      where.add('model = ?');
+      args.add(model);
+    }
+    if (days != null && days > 0) {
+      where.add('created_ms >= ?');
+      args.add(
+        DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch,
+      );
+    }
+    if (keyId != null) {
+      if (keyId.isEmpty) {
+        where.add("(key_id IS NULL OR key_id = '')");
+      } else {
+        where.add('key_id = ?');
+        args.add(keyId);
+      }
+    }
+    if (sessionId != null && sessionId.isNotEmpty) {
+      where.add('session_id = ?');
+      args.add(sessionId);
+    }
+    final search = (query ?? '').trim();
+    if (search.isNotEmpty) {
+      final like = '%$search%';
+      where.add(
+        '(usg_id LIKE ? OR session_id LIKE ? OR key_id LIKE ? OR model LIKE ?)',
+      );
+      args.addAll([like, like, like, like]);
+    }
     final rows = await db.query(
       'usage_records',
-      where: 'account_id = ?',
-      whereArgs: [accountId],
+      where: where.join(' AND '),
+      whereArgs: args,
       orderBy: 'created_ms DESC',
     );
     return rows.map(UsageRecord.fromDbMap).toList();
@@ -376,6 +506,7 @@ class UsageRepository {
     int page = 1,
     int pageSize = 20,
     int? days,
+    String? query,
   }) async {
     final currentPage = page < 1 ? 1 : page;
     final size = pageSize.clamp(1, 50).toInt();
@@ -390,6 +521,12 @@ class UsageRepository {
         DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch,
       );
     }
+    final search = (query ?? '').trim();
+    if (search.isNotEmpty) {
+      final like = '%$search%';
+      where.add('(session_id LIKE ? OR key_id LIKE ?)');
+      args.addAll([like, like]);
+    }
     final whereSql = where.join(' AND ');
     final total =
         Sqflite.firstIntValue(
@@ -401,7 +538,8 @@ class UsageRepository {
         0;
     final rows = await db.rawQuery(
       '''
-      SELECT $keyExpr AS session_id,
+      SELECT CASE WHEN session_id IS NOT NULL AND session_id != ''
+                    THEN session_id ELSE '' END AS session_id,
              MAX(key_id) AS key_id,
              COUNT(*) AS request_count,
              SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
@@ -422,10 +560,7 @@ class UsageRepository {
     return SessionsPageResult(
       total: total,
       records: rows.map((row) {
-        var sessionId = (row['session_id'] ?? '').toString();
-        if (sessionId.startsWith('key_') || sessionId.startsWith('sk_')) {
-          sessionId = '';
-        }
+        final sessionId = (row['session_id'] ?? '').toString();
         final lastMs = _int(row['last_ms']);
         return SessionStat(
           sessionId: sessionId,
@@ -523,7 +658,10 @@ class UsageRepository {
     for (final entry in byKey.entries) {
       result[entry.key] = [
         for (var i = span - 1; i >= 0; i--)
-          entry.value[dayKey(today.subtract(Duration(days: i)))] ?? 0,
+          entry.value[dayKey(
+                DateTime(today.year, today.month, today.day - i),
+              )] ??
+              0,
       ];
     }
     return result;
@@ -556,6 +694,7 @@ class UsageRepository {
     final row = rows.first;
     return SyncState(
       lastSyncAt: parseDateTime(row['last_sync_at']),
+      lastSuccessAt: parseDateTime(row['last_success_at']),
       lastSyncStatus: row['last_sync_status']?.toString(),
       lastSyncError: row['last_sync_error']?.toString(),
       lastInsertedCount: _int(row['last_inserted_count']),
@@ -587,14 +726,16 @@ class UsageRepository {
           'total_records': 0,
         });
       }
+      final now = nowIso();
       await txn.rawUpdate(
         '''
         UPDATE usage_sync_state
         SET last_sync_at = ?, last_sync_status = ?, last_sync_error = ?,
+            last_success_at = CASE WHEN ? = 'error' THEN last_success_at ELSE ? END,
             last_inserted_count = last_inserted_count + ?
         WHERE account_id = ?
       ''',
-        [nowIso(), status, error, inserted, accountId],
+        [now, status, error, status, now, inserted, accountId],
       );
       await _refreshSyncTotals(txn, accountId);
     });
@@ -602,6 +743,52 @@ class UsageRepository {
 
   Future<void> refreshSyncTotals(int accountId) =>
       db.transaction((txn) => _refreshSyncTotals(txn, accountId));
+
+  /// Cross-isolate sync lease. Foreground and WorkManager use separate
+  /// SQLite connections, so a per-process flag cannot coordinate them.
+  Future<bool> acquireSyncLease(
+    String owner, {
+    Duration ttl = const Duration(minutes: 15),
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final expires = now + ttl.inMilliseconds;
+    return db.transaction((txn) async {
+      final rows = await txn.query('sync_lease', where: 'id = 1', limit: 1);
+      if (rows.isNotEmpty) {
+        final currentOwner = rows.first['owner']?.toString() ?? '';
+        final currentExpiry = (rows.first['expires_at'] as num?)?.toInt() ?? 0;
+        if (currentExpiry > now && currentOwner != owner) return false;
+      }
+      await txn.insert('sync_lease', {
+        'id': 1,
+        'owner': owner,
+        'expires_at': expires,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return true;
+    });
+  }
+
+  Future<bool> renewSyncLease(
+    String owner, {
+    Duration ttl = const Duration(minutes: 15),
+  }) async {
+    final expires = DateTime.now().millisecondsSinceEpoch + ttl.inMilliseconds;
+    final changed = await db.update(
+      'sync_lease',
+      {'expires_at': expires},
+      where: 'id = 1 AND owner = ?',
+      whereArgs: [owner],
+    );
+    return changed > 0;
+  }
+
+  Future<void> releaseSyncLease(String owner) async {
+    await db.delete(
+      'sync_lease',
+      where: 'id = 1 AND owner = ?',
+      whereArgs: [owner],
+    );
+  }
 
   Future<void> _refreshSyncTotals(Transaction txn, int accountId) async {
     final rows = await txn.rawQuery(
@@ -615,16 +802,24 @@ class UsageRepository {
       [accountId],
     );
     final row = rows.isEmpty ? <String, Object?>{} : rows.first;
-    await txn.update(
+    final values = {
+      'total_records': _int(row['total']),
+      'oldest_record_at': row['oldest']?.toString(),
+      'newest_record_at': row['newest']?.toString(),
+    };
+    final updated = await txn.update(
       'usage_sync_state',
-      {
-        'total_records': _int(row['total']),
-        'oldest_record_at': row['oldest']?.toString(),
-        'newest_record_at': row['newest']?.toString(),
-      },
+      values,
       where: 'account_id = ?',
       whereArgs: [accountId],
     );
+    if (updated == 0) {
+      await txn.insert('usage_sync_state', {
+        'account_id': accountId,
+        'deepest_page_fetched': -1,
+        ...values,
+      });
+    }
   }
 
   Totals _totalsFromRow(Map<String, Object?> row) {

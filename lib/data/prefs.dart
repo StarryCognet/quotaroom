@@ -23,8 +23,8 @@ class Prefs {
   }
 
   String get language {
-    final value = _prefs.getString(_langKey) ?? 'zh';
-    return value == 'en' ? 'en' : 'zh';
+    final value = _prefs.getString(_langKey) ?? 'system';
+    return value == 'en' || value == 'zh' ? value : 'system';
   }
 
   String get currency {

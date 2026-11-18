@@ -59,17 +59,18 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- 从 v2.3.0 起，每个 Release 同时提供：
-  - `QuotaRoom-v2.3.0.apk`：Android 7.0+ 安装包
-  - `QuotaRoom-v2.3.0-windows-x64-setup.exe`：Windows 安装版
-  - `QuotaRoom-v2.3.0-windows-x64.zip`：Windows 免安装便携版
-  - `QuotaRoom-v2.3.0-windows-x64-single.exe`：Windows 单文件自解压版
+- 从 v2.4.0 起，每个 Release 同时提供：
+  - `QuotaRoom-v2.4.0.apk`：Android 7.0+ 安装包
+  - `QuotaRoom-v2.4.0-windows-x64-setup.exe`：Windows 安装版
+  - `QuotaRoom-v2.4.0-windows-x64.zip`：Windows 免安装便携版
+  - `QuotaRoom-v2.4.0-windows-x64-single.exe`：Windows 单文件自解压版
   - `SHA256SUMS.txt` / `SHA256SUMS-windows.txt`：校验和
 
 > APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。Windows 版解压即用，更新时解压覆盖原目录即可。
 
 ## 更新记录
 
+- **v2.4.0**：Windows 桌面壳补齐——系统托盘、关闭到托盘、开机隐藏启动、单实例、窗口位置 / 大小记忆、通知点击唤醒；安装版应用内更新会下载 setup、校验 SHA-256 并静默安装。新增全局搜索（`Ctrl+K`）、模型详情、会话详情、当前筛选 CSV 导出、自定义时间范围、数据管理（数据库大小 / 完整性检查 / VACUUM / 清理当前账号）、提醒阈值 / 夜间免打扰 / 通知历史。同一 Cookie 的不同工作区现在拆分为独立账号；同步增加跨 isolate 租约与“最后成功时间”；恢复数据不再被自动清理。页面最大宽度 1180px，支持系统减少动画。新增 macOS / Linux runner 与手动 CI 构建。
 - **v2.3.0**：全页面迁移到 FlClash 风格 prism_ui——首页、统计、记录（会话 / 明细 / Key）、账号、设置、关于、开源许可、登录页与 WebView 登录全部换新；桌面可折叠侧栏、移动悬浮 dock（下方无独立背景层）、squircle 卡片、tinted surface、bento 首页；页面 / 子 Tab / 路由切换、卡片入场、KPI 数值、进度条与图表绘制均带过渡动画。趋势图、柱状图、环形图、sparkline 改为 prism 配色 + CustomPainter，不再依赖 Material 页面或 fl_chart；项目许可证切换为 GPL-3.0（上游 GoGauge 代码保留 MIT）。
 - **v2.2.0**：新增 Windows 桌面端——FFI SQLite、Windows 凭据管理器存储 Cookie、浏览器登录 + 粘贴 Cookie、宽屏左侧导航与快捷键（`Ctrl+1…5`、`Ctrl+R`/`F5`）、Windows Toast 提醒、桌面「另存为」导出、更新公告识别 Windows 便携版 zip；Android 功能、包名、签名与数据格式保持不变。
 - **v2.1.1**：修正更新公告彩带动效——弹窗完全出现后再播放，时长延长到 3 秒，粒子从标题下方朝下喷洒，暗色 / AMOLED 下也清晰可见。
@@ -110,11 +111,16 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 - 会话用量聚合（按 sessionID 分组，无 session 时按 key 拆分）
 - Key 用量：按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间
 - 请求级使用记录，滑到底自动加载 + 搜索 + 时间 / 模型 / Key 筛选
+- 全局搜索（`Ctrl+K`）：跨记录 / 会话 / Key / 模型 / 账号搜索并跳转
+- 模型详情：趋势、主要 Key、最近记录；会话详情：完整 ID、统计与最近记录
 - Key 用量下钻：点按 Key 直接查看该 Key 的记录与 7 日趋势
 - 额度节奏与预计耗尽时间、每日预算、额度 / 预算本地提醒
 - 周期对比、模型 × Key 组合排行、最贵请求 Top 5
-- 同步日志、CSV 导出、SQLite 备份 / 恢复、用量摘要
-- 应用内更新检查；Android 可直接下载安装 APK，Windows 打开对应 Release 附件
+- 同步日志、CSV 导出（支持当前筛选）、SQLite 备份 / 恢复、用量摘要
+- 自定义时间范围：任意起止日期、最近 7/30/90 天、本月、上月
+- 数据管理：数据库大小、临时文件清理、完整性检查、VACUUM、清理当前账号
+- 提醒中心：额度 / 预算阈值、22:00–08:00 夜间免打扰、通知历史
+- 应用内更新检查；Android 校验 SHA-256 后安装 APK，Windows 下载安装版并静默升级
 - 多账号：添加 / 切换 / 重命名 / 重新登录 / 退出 / 删除
 - 自动增量同步（1/5/15/30 分钟），同步范围（30/60/90/180 天 / 全部）
 - 浅色 / 深色 / 跟随系统 / AMOLED 纯黑，中文 / English，CNY / USD
@@ -128,10 +134,11 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 
 - 三种分发形态：安装版 `setup.exe`、便携版 zip、单文件 `single.exe`
 - 宽度 ≥ 700px 使用左侧导航栏（≥ 900px 可展开，窄窗口自动收起为图标栏）；宽度 < 700px 切换为 FlClash 风格悬浮 dock
-- 内容区最大 1240px 居中，卡片使用 squircle 连续圆角与 tinted surface
-- `Ctrl+1…5` 切换首页 / 统计 / 记录 / 账号 / 设置，`Ctrl+R` / `F5` 立即同步
+- 内容区最大 1180px 居中，卡片使用 squircle 连续圆角与 tinted surface
+- `Ctrl+1…5` 切换首页 / 统计 / 记录 / 账号 / 设置，`Ctrl+K` 全局搜索，`Ctrl+R` / `F5` 立即同步
+- 系统托盘、关闭到托盘、开机隐藏启动、单实例、窗口位置 / 大小记忆
 - 系统浏览器打开 opencode.ai，登录后粘贴 `__Host-console_session`
-- Windows Toast 额度 / 预算提醒
+- Windows Toast 额度 / 预算提醒，点击 Toast 唤醒窗口
 - CSV / 数据库备份使用系统「另存为」对话框，用量摘要复制到剪贴板
 - SQLite 通过 FFI 运行，数据位于 `%APPDATA%\StarryCognet\QuotaRoom\quotaroom.db`
 
@@ -142,6 +149,12 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 - 桌面小组件、长按快捷方式
 - 应用内 APK 下载与系统安装器拉起、安装权限引导
 
+### macOS / Linux（实验性）
+
+- 已包含 Flutter runner、托盘、关闭到托盘、自启动（LaunchAgent / autostart .desktop）和窗口状态记忆。
+- 通过 `.github/workflows/desktop-linux-macos.yml` 手动构建，产物为 GitHub Actions artifact。
+- 尚未签名 / 公证，也未纳入正式 Release；欢迎在 issue 中反馈平台问题。
+
 ## 安装
 
 ### Android
@@ -149,7 +162,7 @@ This is a community-maintained Flutter port and rebrand of GoGauge, not an offic
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v2.3.0.apk
+adb install -r QuotaRoom-v2.4.0.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。
@@ -160,9 +173,9 @@ adb install -r QuotaRoom-v2.3.0.apk
 
 | 形态 | 文件 | 使用方式 |
 | --- | --- | --- |
-| 安装版 | `QuotaRoom-v2.3.0-windows-x64-setup.exe` | 双击安装，默认装到 `%LOCALAPPDATA%\Programs\QuotaRoom`，创建开始菜单 / 可选桌面快捷方式，可在「应用和功能」卸载；不需要管理员权限 |
-| 便携版 | `QuotaRoom-v2.3.0-windows-x64.zip` | 解压到任意目录，运行 `QuotaRoom.exe`；更新时解压覆盖 |
-| 单文件 | `QuotaRoom-v2.3.0-windows-x64-single.exe` | 只有一个 exe，双击后先自解压到临时目录再启动；首次启动可能多等几秒 |
+| 安装版 | `QuotaRoom-v2.4.0-windows-x64-setup.exe` | 双击安装，默认装到 `%LOCALAPPDATA%\Programs\QuotaRoom`，创建开始菜单 / 可选桌面快捷方式，可在「应用和功能」卸载；不需要管理员权限 |
+| 便携版 | `QuotaRoom-v2.4.0-windows-x64.zip` | 解压到任意目录，运行 `QuotaRoom.exe`；更新时解压覆盖 |
+| 单文件 | `QuotaRoom-v2.4.0-windows-x64-single.exe` | 只有一个 exe，双击后先自解压到临时目录再启动；首次启动可能多等几秒 |
 
 要求：Windows 10/11 x64。三种形态共用 `%APPDATA%\StarryCognet\QuotaRoom` 下的数据库和凭证，切换形态不会丢数据。安装版卸载不会删除这份用户数据。
 
@@ -234,29 +247,44 @@ dart run tool/windows_plugin_links.dart   # 仅在未开启开发者模式时需
 flutter build windows --release
 
 # 生成三种分发形态到 dist/
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.4.0
 ```
 
 也可以只打某一种：
 
 ```bash
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0 -SkipInstaller
-powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.3.0 -SkipSingleFile
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.4.0 -SkipInstaller
+powershell -ExecutionPolicy Bypass -File tool/package_windows.ps1 -Version 2.4.0 -SkipSingleFile
 ```
 
 产物：
 
 ```
 build/windows/x64/runner/Release/QuotaRoom.exe          # Flutter 原始构建
-dist/QuotaRoom-2.3.0-windows-x64-setup.exe              # 安装版
-dist/QuotaRoom-2.3.0-windows-x64.zip                    # 便携版
-dist/QuotaRoom-2.3.0-windows-x64-single.exe             # 单文件版
+dist/QuotaRoom-2.4.0-windows-x64-setup.exe              # 安装版
+dist/QuotaRoom-2.4.0-windows-x64.zip                    # 便携版
+dist/QuotaRoom-2.4.0-windows-x64-single.exe             # 单文件版
 dist/SHA256SUMS-windows.txt                             # 三者校验和
 ```
 
 打包脚本自动查找 Inno Setup 和 7-Zip；装在非默认路径时用 `-Iscc <ISCC.exe>` / `-SevenZip <7z.exe>` 指定。
 
-> Flutter 在 Windows 上通过符号链接引用插件。开启「设置 → 开发者选项 → 开发人员模式」后 Flutter 会自动创建；未开启时先运行 `tool/windows_plugin_links.dart`，它用目录联接（junction）完成同样的工作。若终端里有全局 `CL` 环境变量，构建前请临时移除，避免 MSVC 参数被污染。
+> Flutter 在 Windows 上通过符号链接引用插件。开启「设置 → 开发者选项 → 开发人员模式」后 Flutter 会自动创建；未开启时先运行 `tool/windows_plugin_links.dart`，它用目录联接（junction）完成同样的工作。仓库同时包含 macOS / Linux runner，因此在 Windows 上构建前尤其需要这一步。若终端里有全局 `CL` 环境变量，构建前请临时移除，避免 MSVC 参数被污染。
+
+### macOS / Linux（实验性）
+
+需要 Flutter 3.47+ 和平台工具链：
+
+```bash
+# macOS
+flutter build macos --release
+
+# Ubuntu / Debian（需要 GTK 3、libsecret、libnotify、libsqlite3、libayatana-appindicator）
+sudo apt-get install -y libgtk-3-dev libsecret-1-dev libnotify-dev   libsqlite3-dev libayatana-appindicator3-dev
+flutter build linux --release
+```
+
+也可以在 GitHub Actions 中手动运行 `Desktop Linux / macOS` workflow，下载未签名产物。
 
 ## 开发预览（演示数据）
 
@@ -285,6 +313,8 @@ android/           MainActivity 中的 HttpOnly Cookie 原生桥
 windows/           Windows runner（QuotaRoom.exe、图标、版本信息）
   installer/       Inno Setup 安装版脚本与简体中文语言文件
   sfx/             7-Zip SFX 单文件配置与 LZMA SDK 模块
+macos/             macOS runner（未签名）
+linux/             Linux runner、.desktop 与图标安装规则
 tool/preview.dart  仅开发用的演示数据入口
 tool/windows_plugin_links.dart  无开发者模式时的 Windows 插件目录联接
 tool/package_windows.ps1        生成 zip / setup.exe / single.exe 三种形态
@@ -306,27 +336,28 @@ THIRD_PARTY_NOTICES.md  上游 MIT、FlClash / prism_ui 与依赖许可说明
 ## 验证
 
 - `flutter analyze`：无问题
-- `flutter test`：43 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、Key 聚合、分页、去重、裁剪、增量游标、配额缓存、更新附件解析）
+- `flutter test`：58 项测试全部通过（Cookie 规范化、go/status 与 request-logs 解析、401、聚合口径、Key 聚合、分页、去重、裁剪、增量游标、配额缓存、更新附件解析、工作区账号拆分、同步租约、v1→v3 数据库迁移、并发设置写入、筛选导出）
 - `flutter build windows --release`：构建成功，生成 `QuotaRoom.exe`
 - `tool/package_windows.ps1`：便携 zip 构建成功；安装版 / 单文件版需要 Inno Setup + 7-Zip，当前机器未安装，本轮只验证了 zip；CI 已加入自动安装这两个工具的步骤
 - Windows 实机验证：启动、浏览器登录 + Cookie 回填、Windows 凭据存储、FFI SQLite 建库、首次全量同步
 - prism_ui 全页面实机验证：可折叠桌面侧栏、移动悬浮 dock（内容可滚到 dock 下方）、`首页 / 统计 / 记录 / 账号 / 设置` 切换与页面滑动动画、bento 首页、squircle 卡片、浅色 / 深色主题、prism 登录页与 Cookie 表单、记录三 Tab 与子 Tab 动画、Key 下钻、账号菜单、设置分组、关于 / 许可页、prism 对话框 / 菜单 / 表单 sheet、自定义 CustomPainter 图表，以及页面滑动 / 子 Tab / 路由 / 卡片 / 数值 / 进度条动画
 - Windows Toast 通知初始化无报错；桌面「另存为」导出、剪贴板摘要与按平台分流的更新流程已实现
-- Android：`flutter build apk --release` 构建成功（62.0 MB）；当前环境没有 Android 设备 / 模拟器，v2.3.0 运行时未复测。v2.1.1 的登录、WebView、五个 Tab、Key 用量、滑到底加载、深色模式、中英切换、模型筛选、开源许可页均已在 Android 15 x86_64 模拟器实测；v2.3.0 的 Android 构建由 CI 继续覆盖
+- Android：`flutter build apk` 构建成功；当前环境没有 Android 设备 / 模拟器，v2.4.0 的 Android 运行时未复测。v2.1.1 的登录、WebView、五个 Tab、Key 用量、滑到底加载、深色模式、中英切换、模型筛选、开源许可页均已在 Android 15 x86_64 模拟器实测；Android 构建由 CI 继续覆盖
 
 ## 已知限制
 
 - Windows 不使用内置 WebView 登录，需要系统浏览器 + 粘贴 Cookie；这是 Windows 上没有等价 HttpOnly Cookie 桥的取舍。
-- 桌面端自动同步在应用运行期间生效；关闭窗口后不会常驻托盘或后台同步（尚未实现系统托盘）。
-- Windows Toast 在未打包为 MSIX 的情况下可以显示，但系统不允许应用取消已弹出的通知或读取通知历史。
+- 关闭到托盘默认开启，进程隐藏后同步与提醒继续；从托盘菜单“退出”后才会停止。开机自启动使用当前用户 Run 键，可在设置 → 桌面集成中关闭。
+- Windows Toast 点击后会唤醒窗口；应用内会保存最近通知历史，但未打包为 MSIX 时无法从系统层面撤销已弹出的通知。
 - Windows 可执行文件暂未做代码签名，SmartScreen 可能提示「未知发布者」；安装版、便携版、单文件版都如此。
-- 桌面端应用内更新目前下载便携版 zip；安装版 / 单文件版用户也可以到 Release 页面选择对应附件。更新不做静默替换。
+- Windows 应用内更新优先下载安装版并静默升级；便携版 / 单文件版用户仍建议到 Release 页面手动替换。更新包会校验 SHA-256，但可执行文件尚未代码签名。
 - 单文件版是自解压启动器，首次启动需要先解压 Flutter 运行时（约 30 MB），因此比便携版慢几秒；它不是真正的单二进制 Flutter 应用。
 - v2.3.0 的桌面 / 移动页面、弹窗与图表均已迁移；趋势图、柱状图、环形图和 sparkline 改为 prism 配色 + CustomPainter，不再依赖 fl_chart 或 Material 页面组件。
 - prism_ui 目前为 0.1.2，版本较新；如遇组件行为变化，可以回退到 Flutter widgets 实现，页面结构不受影响。
 - 登录仍是最脆弱环节：opencode.ai 改登录页或 Cookie 策略时需要同步调整；粘贴 Cookie 兜底始终可用。
 - 官方明细接口只保留 30 天，超过 30 天的数据只能依赖本机历史累积。
-- macOS / Linux 尚未提供构建产物；Flutter 代码中的平台分支已预留，但未做发布验证。
+- macOS / Linux 已有 runner 和手动 CI 构建工作流，但没有签名、公证和正式 Release；当前正式支持平台仍是 Android + Windows。
+- 同一 Cookie 的不同工作区会拆分为独立账号；重新登录到不同工作区时会先询问，不会自动合并历史。
 
 ## 隐私
 
