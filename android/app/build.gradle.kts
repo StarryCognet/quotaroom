@@ -4,12 +4,28 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// CI provides a stable release keystore through environment variables so
+// successive releases can upgrade each other. Local builds without these
+// variables keep using the debug keystore.
+val qrKeystorePath: String? = System.getenv("QR_KEYSTORE_PATH")
+
 android {
     namespace = "com.starrycognet.quotaroom"
     // notifications / home_widget pull androidx.core 1.19, which requires
     // compiling against API 37; runtime target stays on Flutter's default.
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
+
+    signingConfigs {
+        if (qrKeystorePath != null) {
+            create("release") {
+                storeFile = file(qrKeystorePath)
+                storePassword = System.getenv("QR_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("QR_KEY_ALIAS")
+                keyPassword = System.getenv("QR_KEY_PASSWORD")
+            }
+        }
+    }
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -35,9 +51,13 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // CI signs with the project release keystore; local builds fall
+            // back to the debug keystore.
+            signingConfig = if (qrKeystorePath != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

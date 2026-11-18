@@ -40,7 +40,18 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.QR_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/quotaroom-release.jks"
+
       - name: Build release APK
+        env:
+          QR_KEYSTORE_PATH: ${{ runner.temp }}/quotaroom-release.jks
+          QR_KEYSTORE_PASSWORD: ${{ secrets.QR_KEYSTORE_PASSWORD }}
+          QR_KEY_ALIAS: ${{ secrets.QR_KEY_ALIAS }}
+          QR_KEY_PASSWORD: ${{ secrets.QR_KEY_PASSWORD }}
         run: flutter build apk --release
 
       - name: Package APK and checksum

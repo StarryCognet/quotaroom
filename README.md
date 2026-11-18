@@ -34,7 +34,7 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 - v2.0.0 直链：[QuotaRoom-v2.0.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.0.0/QuotaRoom-v2.0.0.apk)
 - SHA-256：`c1fe65f3be6c5a150a618a7b0c3fc29a5f0eebd3dc974b88a4cc89b92b4867c9`
 
-> 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
+> APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
@@ -126,7 +126,7 @@ flutter build apk --release
 
 产物：`build/app/outputs/flutter-apk/app-release.apk`。
 
-> 当前 `android/app/build.gradle.kts` 的 release 构建使用 debug 签名，方便个人安装。若要分发或上架，请配置自己的 keystore。
+> GitHub Actions 通过 `QR_KEYSTORE_*` Secrets 使用固定 release keystore 签名。本地直接构建时若未设置这些环境变量，会回退到 debug 签名，仅适合本地安装测试。
 
 ## 开发预览（演示数据）
 

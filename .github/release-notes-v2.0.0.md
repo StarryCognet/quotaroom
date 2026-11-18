@@ -38,8 +38,7 @@
 
 - 安装包：`QuotaRoom-v2.0.0.apk`
 - 系统要求：Android 7.0+（minSdk 24）
-- 可直接覆盖安装 v1.2.0（包名与签名不变）
-- 当前为 debug 签名，适合个人安装；上架或长期分发请配置 release keystore
+- 使用固定 release keystore 签名；从旧的 debug 签名版本升级需先卸载一次，之后可直接覆盖升级
 - SHA-256 见 Release 附件 `SHA256SUMS.txt`
 
 ## 构建
