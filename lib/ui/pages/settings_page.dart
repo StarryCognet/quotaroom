@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -5,13 +6,14 @@ import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, TextInputType;
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/desktop_shell.dart';
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
+import '../../core/package_info_cache.dart';
 import '../../core/platform.dart';
 import '../../data/export_service.dart';
 import '../../data/models.dart';
@@ -21,6 +23,7 @@ import '../prism/prism_login_page.dart';
 import '../prism/prism_route.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/export_helper.dart';
 import '../widgets/update_dialog.dart';
 import 'about_page.dart';
 
@@ -35,7 +38,7 @@ class SettingsPage extends StatelessWidget {
     final account = state.activeAccount;
     final sync = state.dashboard?.sync;
     final lastSync = fmtRelative(
-      sync?.lastSyncAt,
+      sync?.lastSuccessOrAttempt,
       never: l10n.t('never'),
       justNow: l10n.t('justNow'),
       minAgo: l10n.t('minAgo'),
@@ -145,14 +148,49 @@ class SettingsPage extends StatelessWidget {
               value: state.settings.notificationsEnabled,
               onChanged: (value) => _toggleNotifications(context, state, value),
             ),
-            if (state.settings.notificationsEnabled)
+            if (state.settings.notificationsEnabled) ...[
               _ActionRow(
                 label: l10n.t('testNotification'),
                 glyph: AppGlyphs.toggleOn,
                 onTap: () => _testNotification(context, state),
               ),
+              _PillRow<int>(
+                title: l10n.t('quotaAlertThreshold'),
+                subtitle: l10n.t('quotaAlertThresholdDesc'),
+                value: state.settings.quotaAlertPercent,
+                options: const [
+                  PillOption(value: 10, label: '10%'),
+                  PillOption(value: 15, label: '15%'),
+                  PillOption(value: 20, label: '20%'),
+                  PillOption(value: 25, label: '25%'),
+                  PillOption(value: 30, label: '30%'),
+                ],
+                onChanged: (value) => state.setQuotaAlertPercent(value),
+              ),
+              _PillRow<int>(
+                title: l10n.t('budgetAlertThreshold'),
+                subtitle: l10n.t('budgetAlertThresholdDesc'),
+                value: state.settings.budgetAlertPercent,
+                options: const [
+                  PillOption(value: 70, label: '70%'),
+                  PillOption(value: 80, label: '80%'),
+                  PillOption(value: 90, label: '90%'),
+                ],
+                onChanged: (value) => state.setBudgetAlertPercent(value),
+              ),
+              _SwitchRow(
+                title: l10n.t('quietHours'),
+                subtitle: l10n.t('quietHoursDesc'),
+                value: state.settings.quietHoursEnabled,
+                onChanged: (value) => state.setQuietHoursEnabled(value),
+              ),
+            ],
           ],
         ),
+        if (state.settings.notificationsEnabled) ...[
+          const SizedBox(height: 12),
+          _AlertHistoryCard(state: state),
+        ],
         const SizedBox(height: 12),
         _SettingsCard(
           title: l10n.t('setAppearance'),
@@ -187,8 +225,9 @@ class SettingsPage extends StatelessWidget {
             _PillRow<String>(
               title: l10n.t('language'),
               subtitle: l10n.t('languageDesc'),
-              value: state.language,
-              options: const [
+              value: state.languagePreference,
+              options: [
+                PillOption(value: 'system', label: l10n.t('system')),
                 PillOption(value: 'zh', label: '中文'),
                 PillOption(value: 'en', label: 'English'),
               ],
@@ -203,6 +242,10 @@ class SettingsPage extends StatelessWidget {
             ),
           ],
         ),
+        if (isDesktop) ...[
+          const SizedBox(height: 12),
+          _DesktopSettingsCard(state: state),
+        ],
         const SizedBox(height: 12),
         _SettingsCard(
           title: l10n.t('setData'),
@@ -253,6 +296,8 @@ class SettingsPage extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _DataMaintenanceCard(state: state),
         const SizedBox(height: 12),
         _SettingsCard(
           title: l10n.t('syncLog'),
@@ -323,20 +368,7 @@ class SettingsPage extends StatelessWidget {
     required File file,
     required String shareText,
   }) async {
-    final state = context.read<AppState>();
-    final l10n = state.l10n;
-    final service = ExportService(db: state.db.db, usage: state.usageRepo);
-    if (!isDesktop) {
-      await service.shareFile(file, text: shareText);
-      return;
-    }
-    final location = await getSaveLocation(
-      suggestedName: p.basename(file.path),
-    );
-    if (location == null) return;
-    await file.copy(location.path);
-    if (!context.mounted) return;
-    _notice(context, l10n.t('savedTo', {'path': location.path}));
+    await saveOrShareExport(context, file: file, shareText: shareText);
   }
 
   Future<void> _exportRecords(BuildContext context) async {
@@ -652,6 +684,351 @@ class _ActionRow extends StatelessWidget {
   }
 }
 
+class _AlertHistoryCard extends StatefulWidget {
+  const _AlertHistoryCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_AlertHistoryCard> createState() => _AlertHistoryCardState();
+}
+
+class _AlertHistoryCardState extends State<_AlertHistoryCard> {
+  List<Map<String, Object?>> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final items = await widget.state.notifications.history();
+    if (mounted) setState(() => _items = items.take(6).toList());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    final l10n = widget.state.l10n;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: l10n.t('alertHistory'),
+            trailing: IconButton(
+              onPressed: _load,
+              tooltip: l10n.t('refresh'),
+              icon: const GlyphIcon(AppGlyphs.refresh, size: 17),
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (_items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                l10n.t('alertHistoryEmpty'),
+                style: AppTextStyle.caption2
+                    .of(context)
+                    .copyWith(color: scheme.onSurfaceVariant),
+              ),
+            )
+          else
+            for (var i = 0; i < _items.length; i++) ...[
+              if (i > 0) Divider(height: 12, thickness: 1),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GlyphIcon(
+                    AppGlyphs.requests,
+                    size: 16,
+                    color: scheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          (_items[i]['title'] ?? '').toString(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.caption2
+                              .of(context, emphasized: true)
+                              .copyWith(color: scheme.onSurface),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          (_items[i]['body'] ?? '').toString(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    fmtRelative(
+                      parseDateTime(_items[i]['at']),
+                      never: l10n.t('never'),
+                      justNow: l10n.t('justNow'),
+                      minAgo: l10n.t('minAgo'),
+                      hrAgo: l10n.t('hrAgo'),
+                      dayAgo: l10n.t('dayAgo'),
+                    ),
+                    style: AppTextStyle.caption2
+                        .of(context)
+                        .copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DataMaintenanceCard extends StatefulWidget {
+  const _DataMaintenanceCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_DataMaintenanceCard> createState() => _DataMaintenanceCardState();
+}
+
+class _DataMaintenanceCardState extends State<_DataMaintenanceCard> {
+  String _size = '—';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadSize());
+  }
+
+  Future<void> _loadSize() async {
+    final bytes = await widget.state.databaseSizeBytes();
+    if (!mounted) return;
+    setState(() => _size = _formatBytes(bytes));
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<void> _cleanTemp() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final count = await widget.state.cleanupTempFiles();
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show(
+        widget.state.l10n.t('cleanedFiles', {'n': count}),
+        level: BannerLevel.success,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _checkIntegrity() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await widget.state.checkDatabaseIntegrity();
+      if (!mounted) return;
+      final ok = result.toLowerCase() == 'ok';
+      BannerHost.maybeOf(context)?.show(
+        ok
+            ? widget.state.l10n.t('integrityOk')
+            : widget.state.l10n.t('integrityFailed', {'result': result}),
+        level: ok ? BannerLevel.success : BannerLevel.error,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show(
+        widget.state.l10n.t('integrityFailed', {'result': e}),
+        level: BannerLevel.error,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _compact() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.state.compactDatabase();
+      await _loadSize();
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show(
+        widget.state.l10n.t('databaseCompacted'),
+        level: BannerLevel.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show(
+        '${widget.state.l10n.t('loadFailed')}: $e',
+        level: BannerLevel.error,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _clear() async {
+    if (_busy) return;
+    final l10n = widget.state.l10n;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.t('clearAccountData'),
+      message: l10n.t('clearAccountConfirm'),
+      cancelLabel: l10n.t('cancel'),
+      confirmLabel: l10n.t('clearAccountData'),
+      danger: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final count = await widget.state.clearActiveAccountUsage();
+      await _loadSize();
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show(
+        count > 0
+            ? l10n.t('dataCleared', {'n': count})
+            : l10n.t('noDataCleared'),
+        level: BannerLevel.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      BannerHost.maybeOf(context)?.show('$e', level: BannerLevel.error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = widget.state.l10n;
+    return _SettingsCard(
+      title: l10n.t('dataManagement'),
+      children: [
+        _InfoRow(label: l10n.t('databaseSize'), value: _size),
+        _ActionRow(
+          label: l10n.t('cleanupTemp'),
+          subtitle: l10n.t('cleanupTempDesc'),
+          glyph: AppGlyphs.broom,
+          onTap: _cleanTemp,
+        ),
+        _ActionRow(
+          label: l10n.t('integrityCheck'),
+          subtitle: l10n.t('integrityCheckDesc'),
+          glyph: AppGlyphs.verified,
+          onTap: _checkIntegrity,
+        ),
+        _ActionRow(
+          label: l10n.t('compactDatabase'),
+          subtitle: l10n.t('compactDatabaseDesc'),
+          glyph: AppGlyphs.layers,
+          onTap: _compact,
+        ),
+        _ActionRow(
+          label: l10n.t('clearAccountData'),
+          subtitle: l10n.t('clearAccountDataDesc'),
+          glyph: AppGlyphs.broom,
+          danger: true,
+          onTap: _clear,
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopSettingsCard extends StatefulWidget {
+  const _DesktopSettingsCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_DesktopSettingsCard> createState() => _DesktopSettingsCardState();
+}
+
+class _DesktopSettingsCardState extends State<_DesktopSettingsCard> {
+  bool _launchAtStartup = false;
+  bool _busy = false;
+  bool _userToggled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final enabled = await DesktopShell.instance.isLaunchAtStartupEnabled();
+    if (mounted && !_userToggled && !_busy) {
+      setState(() => _launchAtStartup = enabled);
+    }
+  }
+
+  Future<void> _toggleLaunch(bool value) async {
+    if (_busy) return;
+    _userToggled = true;
+    setState(() => _busy = true);
+    final ok = await DesktopShell.instance.setLaunchAtStartup(value);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (ok) _launchAtStartup = value;
+    });
+    if (!ok) {
+      _userToggled = false;
+      unawaited(_load());
+    }
+    final l10n = widget.state.l10n;
+    BannerHost.maybeOf(context)?.show(
+      ok ? l10n.t('settingSaved') : l10n.t('settingSaveFailed'),
+      level: ok ? BannerLevel.success : BannerLevel.error,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = widget.state.l10n;
+    return _SettingsCard(
+      title: l10n.t('desktopIntegration'),
+      children: [
+        _SwitchRow(
+          title: l10n.t('closeToTray'),
+          subtitle: l10n.t('closeToTrayDesc'),
+          value: DesktopShell.instance.closeToTray,
+          onChanged: (value) async {
+            await DesktopShell.instance.setCloseToTray(value);
+            if (mounted) setState(() {});
+          },
+        ),
+        _SwitchRow(
+          title: l10n.t('launchAtStartup'),
+          subtitle: l10n.t('launchAtStartupDesc'),
+          value: _launchAtStartup,
+          onChanged: _toggleLaunch,
+        ),
+      ],
+    );
+  }
+}
+
 class _SwitchRow extends StatelessWidget {
   const _SwitchRow({
     required this.title,
@@ -898,8 +1275,12 @@ class _BudgetRow extends StatelessWidget {
         ),
       ),
     );
-    if (result == null) return;
+    if (result == null) {
+      controller.dispose();
+      return;
+    }
     if (result == '__clear__') {
+      controller.dispose();
       await state.setDailyBudget(null);
       if (!context.mounted) return;
       BannerHost.maybeOf(context)?.show(l10n.t('budgetCleared'));
@@ -907,11 +1288,14 @@ class _BudgetRow extends StatelessWidget {
     }
     final value = double.tryParse(result.trim().replaceAll(',', '.'));
     if (value == null || value <= 0) {
-      await state.setDailyBudget(null);
+      // Invalid input must not silently delete an existing budget.
+      controller.dispose();
       if (!context.mounted) return;
-      BannerHost.maybeOf(context)?.show(l10n.t('budgetCleared'));
+      BannerHost.maybeOf(context)
+          ?.show(l10n.t('budgetInvalid'), level: BannerLevel.error);
       return;
     }
+    controller.dispose();
     final usd = state.currency == 'CNY' ? value / state.usdCny : value;
     await state.setDailyBudget(usd);
     if (!context.mounted) return;
@@ -927,7 +1311,7 @@ class _VersionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
+      future: loadPackageInfo(),
       builder: (context, snapshot) {
         final version = snapshot.hasData
             ? '${snapshot.data!.version} (${snapshot.data!.buildNumber})'

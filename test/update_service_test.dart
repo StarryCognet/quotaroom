@@ -63,6 +63,52 @@ void main() {
     expect(info.hasApk, isTrue);
   });
 
+  test('release payload prefers the Windows installer and checksums', () {
+    final info = UpdateService.parseRelease({
+      'tag_name': 'v2.4.0',
+      'html_url':
+          'https://github.com/StarryCognet/quotaroom/releases/tag/v2.4.0',
+      'body': 'Desktop update',
+      'assets': [
+        {
+          'name': 'QuotaRoom-v2.4.0-windows-x64-setup.exe',
+          'size': 42000000,
+          'browser_download_url':
+              'https://example.test/QuotaRoom-v2.4.0-windows-x64-setup.exe',
+        },
+        {
+          'name': 'QuotaRoom-v2.4.0-windows-x64.zip',
+          'size': 24000000,
+          'browser_download_url':
+              'https://example.test/QuotaRoom-v2.4.0-windows-x64.zip',
+        },
+        {
+          'name': 'QuotaRoom-v2.4.0-windows-x64-single.exe',
+          'size': 30000000,
+          'browser_download_url':
+              'https://example.test/QuotaRoom-v2.4.0-windows-x64-single.exe',
+        },
+        {
+          'name': 'SHA256SUMS-windows.txt',
+          'size': 200,
+          'browser_download_url': 'https://example.test/SHA256SUMS-windows.txt',
+        },
+        {
+          'name': 'SHA256SUMS.txt',
+          'size': 100,
+          'browser_download_url': 'https://example.test/SHA256SUMS.txt',
+        },
+      ],
+    }, current: '2.3.0');
+    expect(info.hasWindowsInstaller, isTrue);
+    expect(info.windowsUrl, endsWith('setup.exe'));
+    expect(info.windowsSize, 42000000);
+    expect(info.windowsPortableUrl, endsWith('.zip'));
+    expect(info.windowsSingleUrl, endsWith('single.exe'));
+    expect(info.windowsChecksumsUrl, endsWith('SHA256SUMS-windows.txt'));
+    expect(info.checksumsUrl, endsWith('SHA256SUMS.txt'));
+  });
+
   test('cleanNotes removes markdown while keeping bullets', () {
     final cleaned = UpdateService.cleanNotes(
       '### 标题\n\n- **一**\n- [链接](https://example.com)\n`code`',

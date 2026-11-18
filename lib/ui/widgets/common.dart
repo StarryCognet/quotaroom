@@ -56,6 +56,7 @@ class AppCard extends StatelessWidget {
             ),
       child: Padding(padding: padding, child: child),
     );
+    if (MediaQuery.disableAnimationsOf(context)) return card;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 320),
@@ -185,15 +186,19 @@ class RangeSelector extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.l10n,
+    this.onCustom,
+    this.customLabel,
   });
 
   final String value;
   final ValueChanged<String> onChanged;
   final L10n l10n;
+  final VoidCallback? onCustom;
+  final String? customLabel;
 
   @override
   Widget build(BuildContext context) {
-    return PillSelector<String>(
+    final selector = PillSelector<String>(
       value: value,
       onChanged: onChanged,
       options: [
@@ -201,6 +206,24 @@ class RangeSelector extends StatelessWidget {
         PillOption(value: '7d', label: l10n.t('d7')),
         PillOption(value: '30d', label: l10n.t('d30')),
         PillOption(value: 'all', label: l10n.t('all')),
+      ],
+    );
+    if (onCustom == null) return selector;
+    return Row(
+      children: [
+        Expanded(child: selector),
+        const SizedBox(width: 6),
+        IconButton(
+          onPressed: onCustom,
+          tooltip: customLabel == null
+              ? l10n.t('customRange')
+              : '${l10n.t('customRange')}: $customLabel',
+          icon: GlyphIcon(
+            AppGlyphs.clock,
+            size: 19,
+            color: value == 'custom' ? context.colorScheme.primary : null,
+          ),
+        ),
       ],
     );
   }
@@ -503,8 +526,9 @@ class ModelIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final source = model.toLowerCase();
     final base = source.split('-').first;
-    var name = _map[base];
-    name ??= base.startsWith('hy') ? 'hy' : 'deepseek';
+    // Unknown families get a neutral glyph instead of being mislabeled with
+    // another vendor's logo.
+    var name = _map[base] ?? 'unknown';
     final dark = Theme.brightnessOf(context) == Brightness.dark;
     var themed = name;
     if (dark && const ['gpt', 'grok', 'mimo'].contains(name)) {

@@ -23,10 +23,14 @@ bool get supportsEmbeddedWebLogin => isAndroid;
 /// WorkManager, home-screen widgets and launcher quick actions are Android-only.
 bool get supportsAndroidIntegrations => isAndroid;
 
-/// Local notifications are implemented for Android and Windows. Other desktop
-/// targets keep the in-app state but do not post OS notifications.
+/// Local notifications are implemented for Android, Windows, macOS and Linux
+/// (Linux requires a running notification daemon).
 bool get supportsLocalNotifications =>
-    isAndroid || (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows);
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux);
 
 /// Current platform name used in the about/settings pages.
 String get platformLabel {

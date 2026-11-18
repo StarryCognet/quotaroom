@@ -9,6 +9,8 @@ import '../../state/app_state.dart';
 import '../prism/app_glyphs.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
+import '../widgets/date_range_dialog.dart';
+import '../widgets/detail_sheets.dart';
 import '../widgets/skeleton.dart';
 
 class StatsPage extends StatefulWidget {
@@ -54,7 +56,19 @@ class _StatsPageState extends State<StatsPage> {
           value: state.dashboardRange,
           onChanged: (value) => state.setRange(value),
           l10n: l10n,
+          onCustom: () => showCustomRangeDialog(context, state),
+          customLabel: state.customRangeLabel,
         ),
+        if (state.dashboardRange == 'custom' &&
+            state.customRangeLabel != null) ...[
+          const SizedBox(height: 5),
+          Text(
+            state.customRangeLabel!,
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
         const SizedBox(height: 12),
         _KpiRow(totals: totals, state: state),
         const SizedBox(height: 14),
@@ -524,65 +538,72 @@ class _ModelKeyCard extends StatelessWidget {
           else
             for (var i = 0; i < entries.length; i++) ...[
               if (i > 0) Divider(height: 12, thickness: 1),
-              Row(
-                children: [
-                  ModelIcon(model: entries[i].model, size: 15),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              PressSurface(
+                fill: const Color(0x00000000),
+                shape: AppShape.all(AppCorner.sm),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                onPressed: () =>
+                    showModelDetail(context, state, entries[i].model),
+                child: Row(
+                  children: [
+                    ModelIcon(model: entries[i].model, size: 15),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entries[i].model,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.caption1
+                                .of(context, emphasized: true)
+                                .copyWith(color: scheme.onSurface),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            '${_keyLabel(entries[i].keyId, state, l10n)} · '
+                            '${fmtInt(entries[i].requestCount)} '
+                            '${l10n.t('requestsInline')}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.caption2
+                                .of(context)
+                                .copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          entries[i].model,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyle.caption1
+                          fmtTokens(entries[i].totalTokens),
+                          style: AppTextStyle.caption2
                               .of(context, emphasized: true)
-                              .copyWith(color: scheme.onSurface),
+                              .copyWith(
+                                color: scheme.onSurface,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                         const SizedBox(height: 1),
                         Text(
-                          '${_keyLabel(entries[i].keyId, state, l10n)} · '
-                          '${fmtInt(entries[i].requestCount)} '
-                          '${l10n.t('requestsInline')}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          fmtMoney(
+                            entries[i].totalCostUsd,
+                            currency: state.currency,
+                            rate: state.usdCny,
+                          ),
                           style: AppTextStyle.caption2
                               .of(context)
-                              .copyWith(color: scheme.onSurfaceVariant),
+                              .copyWith(color: const Color(0xFFD97706)),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        fmtTokens(entries[i].totalTokens),
-                        style: AppTextStyle.caption2
-                            .of(context, emphasized: true)
-                            .copyWith(
-                              color: scheme.onSurface,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        fmtMoney(
-                          entries[i].totalCostUsd,
-                          currency: state.currency,
-                          rate: state.usdCny,
-                        ),
-                        style: AppTextStyle.caption2
-                            .of(context)
-                            .copyWith(color: const Color(0xFFD97706)),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
         ],

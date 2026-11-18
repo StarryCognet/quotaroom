@@ -88,4 +88,51 @@ void main() {
       await dir.delete(recursive: true);
     }
   });
+
+  test('restored history is protected from automatic retention', () async {
+    final dir = await Directory.systemTemp.createTemp('quotaroom-retention-');
+    AppDatabase? source;
+    AppDatabase? target;
+    try {
+      final sourcePath = p.join(dir.path, 'source.db');
+      final backupPath = p.join(dir.path, 'backup.db');
+      final targetPath = p.join(dir.path, 'target.db');
+
+      source = await AppDatabase.open(
+        path: sourcePath,
+        factory: databaseFactoryFfi,
+      );
+      final sourceRepo = UsageRepository(source.db);
+      await sourceRepo.insertUsageRecords([
+        UsageRecord(
+          usgId: 'old-restored',
+          createdAt: DateTime.now().subtract(const Duration(days: 40)),
+          model: 'old-model',
+          inputTokens: 10,
+          outputTokens: 2,
+          costRaw: 100,
+          costUsd: 0.001,
+        ),
+      ], 1);
+      await source.db.execute("VACUUM INTO '$backupPath'");
+      await source.close();
+      source = null;
+
+      target = await AppDatabase.open(
+        path: targetPath,
+        factory: databaseFactoryFfi,
+      );
+      final targetRepo = UsageRepository(target.db);
+      final service = ExportService(db: target.db, usage: targetRepo);
+      expect(await service.restoreUsageInto(1, backupPath), 1);
+
+      expect(await targetRepo.pruneOldRecords(1, 1), 0);
+      final totals = await targetRepo.totals(1, 'all');
+      expect(totals.requestCount, 1);
+    } finally {
+      if (source != null) await source.close();
+      if (target != null) await target.close();
+      await dir.delete(recursive: true);
+    }
+  });
 }

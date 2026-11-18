@@ -362,6 +362,7 @@ class _AccountCard extends StatelessWidget {
               PopupAnchor(
                 targetBuilder: (open) => IconButton(
                   onPressed: open,
+                  tooltip: l10n.t('moreActions'),
                   icon: const GlyphIcon(AppGlyphs.more, size: 20),
                 ),
                 popupBuilder: (context) => PopupMenu(

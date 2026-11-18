@@ -18,12 +18,18 @@ void main() {
       'show_accounts_panel': true,
       'daily_budget_usd': 1.5,
       'notifications_enabled': true,
+      'quota_alert_percent': 15,
+      'budget_alert_percent': 90,
+      'quiet_hours_enabled': true,
       'amoled': true,
     });
     expect(settings.autoSync, isFalse);
     expect(settings.showAccountsPanel, isTrue);
     expect(settings.dailyBudgetUsd, 1.5);
     expect(settings.notificationsEnabled, isTrue);
+    expect(settings.quotaAlertPercent, 15);
+    expect(settings.budgetAlertPercent, 90);
+    expect(settings.quietHoursEnabled, isTrue);
     expect(settings.amoled, isTrue);
   });
 

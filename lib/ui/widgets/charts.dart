@@ -64,18 +64,23 @@ class TodayTrendChart extends StatelessWidget {
           child: TweenAnimationBuilder<double>(
             key: ValueKey('hour-bars-${points.hashCode}'),
             tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 620),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 620),
             curve: Curves.easeOutCubic,
-            builder: (context, progress, _) => CustomPaint(
-              painter: _HourBarsPainter(
-                points: points,
-                progress: progress,
-                inputColor: scheme.primary,
-                outputColor: _green,
-                gridColor: scheme.outlineVariant.withValues(alpha: 0.45),
-                textStyle: style,
+            builder: (context, progress, _) => Semantics(
+              label: l10n.t('todayTrend'),
+              child: CustomPaint(
+                painter: _HourBarsPainter(
+                  points: points,
+                  progress: progress,
+                  inputColor: scheme.primary,
+                  outputColor: _green,
+                  gridColor: scheme.outlineVariant.withValues(alpha: 0.45),
+                  textStyle: style,
+                ),
+                child: const SizedBox.expand(),
               ),
-              child: const SizedBox.expand(),
             ),
           ),
         ),
@@ -266,15 +271,21 @@ class ModelDonut extends StatelessWidget {
               TweenAnimationBuilder<double>(
                 key: ValueKey('donut-$dimension-${total.toStringAsFixed(3)}'),
                 tween: Tween(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 700),
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 700),
                 curve: Curves.easeOutCubic,
-                builder: (context, progress, _) => CustomPaint(
-                  painter: _DonutPainter(
-                    sections: sections,
-                    total: total,
-                    progress: progress,
+                builder: (context, progress, _) => Semantics(
+                  label:
+                      '${l10n.t('modelUsage')}: $centerLabel ${fmtTokens(total.toInt())}',
+                  child: CustomPaint(
+                    painter: _DonutPainter(
+                      sections: sections,
+                      total: total,
+                      progress: progress,
+                    ),
+                    child: const SizedBox.expand(),
                   ),
-                  child: const SizedBox.expand(),
                 ),
               ),
               Column(
@@ -442,7 +453,17 @@ class _DonutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_DonutPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.total != total;
+    if (oldDelegate.progress != progress || oldDelegate.total != total) {
+      return true;
+    }
+    if (oldDelegate.sections.length != sections.length) return true;
+    for (var i = 0; i < sections.length; i++) {
+      if (oldDelegate.sections[i].value != sections[i].value ||
+          oldDelegate.sections[i].color != sections[i].color) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -504,21 +525,26 @@ class TrendLineChart extends StatelessWidget {
               'trend-${days.length}-$maxTokens-${maxCost.toStringAsFixed(4)}',
             ),
             tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 760),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 760),
             curve: Curves.easeOutCubic,
-            builder: (context, progress, _) => CustomPaint(
-              painter: _TrendPainter(
-                days: days,
-                progress: progress,
-                tokenColor: scheme.primary,
-                requestColor: _blue,
-                costColor: _amber,
-                gridColor: scheme.outlineVariant.withValues(alpha: 0.45),
-                textStyle: style,
-                currency: currency,
-                rate: rate,
+            builder: (context, progress, _) => Semantics(
+              label: l10n.t('usageTrend'),
+              child: CustomPaint(
+                painter: _TrendPainter(
+                  days: days,
+                  progress: progress,
+                  tokenColor: scheme.primary,
+                  requestColor: _blue,
+                  costColor: _amber,
+                  gridColor: scheme.outlineVariant.withValues(alpha: 0.45),
+                  textStyle: style,
+                  currency: currency,
+                  rate: rate,
+                ),
+                child: const SizedBox.expand(),
               ),
-              child: const SizedBox.expand(),
             ),
           ),
         ),
@@ -741,7 +767,13 @@ class _TrendPainter extends CustomPainter {
   bool shouldRepaint(_TrendPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.days != days ||
-        oldDelegate.tokenColor != tokenColor;
+        oldDelegate.tokenColor != tokenColor ||
+        oldDelegate.requestColor != requestColor ||
+        oldDelegate.costColor != costColor ||
+        oldDelegate.gridColor != gridColor ||
+        oldDelegate.textStyle != textStyle ||
+        oldDelegate.currency != currency ||
+        oldDelegate.rate != rate;
   }
 }
 
@@ -763,9 +795,12 @@ class Sparkline extends StatelessWidget {
       height: height,
       width: double.infinity,
       child: TweenAnimationBuilder<double>(
-        key: ValueKey('spark-${values.hashCode}-$color'),
+        // No data-derived key: rebuilding during a sync must not restart the
+        // animation from zero. The painter still repaints when values change.
         tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 520),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 520),
         curve: Curves.easeOutCubic,
         builder: (context, progress, _) =>
             CustomPaint(painter: _SparklinePainter(values, color, progress)),

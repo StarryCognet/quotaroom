@@ -1,8 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
+import '../core/desktop_shell.dart';
 import '../core/i18n.dart';
+import '../core/platform.dart';
 import '../data/account_repository.dart';
 import '../data/app_database.dart';
 import '../data/background_sync.dart';
@@ -17,6 +22,7 @@ import '../data/sync_service.dart';
 import '../data/update_service.dart';
 import '../data/usage_repository.dart';
 import '../data/widget_service.dart';
+import 'records_navigation.dart';
 
 /// Single app-wide state holder. Repositories stay synchronous/awaited; this
 /// class exposes the data each page needs and notifies listeners.
@@ -54,6 +60,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool loadingDashboard = false;
   String? errorMessage;
   String? initError;
+  bool authRequired = false;
+  bool _errorFromSync = false;
+  bool _initializing = false;
+  int _dashboardRequest = 0;
+  int _overviewRequest = 0;
 
   List<Account> accounts = const [];
   Account? activeAccount;
@@ -69,7 +80,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? updateError;
   DateTime? lastUpdateCheck;
 
+  /// One-shot navigation request consumed by the records page.
+  final ValueNotifier<RecordsNavigationRequest?> recordsNavigation =
+      ValueNotifier<RecordsNavigationRequest?>(null);
+
   String dashboardRange = 'today';
+  DateTime? customRangeFrom;
+  DateTime? customRangeTo;
+  String languagePreference = 'system';
   String language = 'zh';
   String themeMode = 'system';
   String currency = 'CNY';
@@ -81,6 +99,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   L10n get l10n => L10n(language);
 
+  String? get customRangeLabel {
+    final from = customRangeFrom;
+    final to = customRangeTo;
+    if (from == null || to == null) return null;
+    String fmt(DateTime value) =>
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+    return '${fmt(from)} – ${fmt(to)}';
+  }
+
   bool get hasLoggedInAccount => accounts.any((account) => account.hasToken);
 
   bool get isLoggedIn => activeAccount?.hasToken == true;
@@ -90,8 +119,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get autoSync => settings.autoSync;
 
   Future<void> init() async {
+    if (_initializing) return;
+    _initializing = true;
+    WidgetsBinding.instance.removeObserver(this);
     WidgetsBinding.instance.addObserver(this);
-    language = prefs.language;
+    await _progressSubscription?.cancel();
+    _progressSubscription = null;
+    languagePreference = prefs.language;
+    language = _resolveLanguage(languagePreference);
     themeMode = prefs.themeMode;
     currency = prefs.currency;
     lastUpdateCheck = prefs.updateCheckedAt;
@@ -100,9 +135,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       settings = await settingsRepo.getSettings();
       keyNames = await settingsRepo.getKeyNames();
       syncLog = await settingsRepo.getSyncLog();
-      await notifications.init();
+      await notifications.init(
+        onTap: () {
+          if (isDesktop) unawaited(DesktopShell.instance.showWindow());
+        },
+      );
       await reloadAccounts();
       await _ensureActiveLoggedIn();
+      if (isDesktop) {
+        unawaited(
+          DesktopShell.instance.attach(
+            onSync: () async {
+              await syncNow();
+            },
+            language: () => language,
+          ),
+        );
+      }
       unawaited(configureBackgroundSync(this));
       _progressSubscription = syncService.progressStream.listen((value) {
         progress = value;
@@ -136,7 +185,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     initialized = true;
     loading = false;
+    _initializing = false;
     notifyListeners();
+  }
+
+  String _resolveLanguage(String preference) {
+    if (preference == 'zh' || preference == 'en') return preference;
+    final code = WidgetsBinding.instance.platformDispatcher.locale.languageCode
+        .toLowerCase();
+    // Chinese locales get Chinese; every other locale gets English instead of
+    // being locked into Chinese on first run.
+    return code.startsWith('zh') ? 'zh' : 'en';
   }
 
   Future<void> reloadAccounts() async {
@@ -163,23 +222,46 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> refreshDashboard({bool forceQuota = false}) async {
     final account = activeAccount;
     if (account == null || !account.hasToken) {
+      _dashboardRequest++;
       dashboard = null;
       loadingDashboard = false;
       notifyListeners();
       return;
     }
+    // Capture the request identity before the first await. A slow read for
+    // account A / range "30d" must never overwrite a newer account/range.
+    final requestId = ++_dashboardRequest;
+    final accountId = account.id;
+    final accountVersion = account.updatedAt;
+    final range = dashboardRange;
+    final rangeFrom = customRangeFrom;
+    final rangeTo = customRangeTo;
+    final bounds = _rangeBounds(range, rangeFrom, rangeTo);
     loadingDashboard = true;
     notifyListeners();
     try {
       // Local aggregates first so a slow quota request never blocks the page.
-      final totals = await usageRepo.totals(account.id, dashboardRange);
+      final totals = await usageRepo.totalsBetween(
+        account.id,
+        fromMs: bounds.fromMs,
+        toMs: bounds.toMs,
+      );
       final today = await usageRepo.totals(account.id, 'today');
       final daily7 = fillDays(await usageRepo.dailyStats(account.id, 7), 7);
       final trend30 = fillDays(await usageRepo.dailyStats(account.id, 30), 30);
       final todayTrend = await usageRepo.todayTrend(account.id);
-      final models = await usageRepo.modelStats(account.id, dashboardRange);
+      final models = await usageRepo.modelStats(
+        account.id,
+        range,
+        rangeFromMs: bounds.fromMs,
+        rangeToMs: bounds.toMs,
+      );
       final sync = await usageRepo.syncState(account.id);
-      final previous = _previousRange();
+      final previous = _previousRange(
+        range,
+        customFrom: rangeFrom,
+        customTo: rangeTo,
+      );
       final previousTotals = previous.fromMs != null
           ? await usageRepo.totalsBetween(
               account.id,
@@ -189,14 +271,28 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           : Totals.zero;
       final modelKeys = await usageRepo.modelKeyStats(
         account.id,
-        dashboardRange,
+        range,
+        rangeFromMs: bounds.fromMs,
+        rangeToMs: bounds.toMs,
       );
       final topExpensive = await usageRepo.topExpensive(
         account.id,
-        dashboardRange,
+        range,
+        rangeFromMs: bounds.fromMs,
+        rangeToMs: bounds.toMs,
       );
+      if (!_dashboardStillCurrent(
+        requestId,
+        accountId,
+        accountVersion,
+        range,
+        rangeFrom,
+        rangeTo,
+      )) {
+        return;
+      }
       dashboard = DashboardData(
-        range: dashboardRange,
+        range: range,
         totals: totals,
         today: today,
         daily7: daily7,
@@ -211,16 +307,96 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         sync: sync,
         accountName: account.name,
       );
-      errorMessage = null;
+      // A local dashboard read must not silently clear a sync/auth error.
+      if (!_errorFromSync) errorMessage = null;
       loadingDashboard = false;
       notifyListeners();
       unawaited(_publishWidget());
       unawaited(_evaluateNotifications());
       unawaited(_refreshQuota(account, forceQuota));
     } catch (e) {
+      if (!_dashboardStillCurrent(
+        requestId,
+        accountId,
+        accountVersion,
+        range,
+        rangeFrom,
+        rangeTo,
+      )) {
+        return;
+      }
       loadingDashboard = false;
       errorMessage = e.toString();
+      _errorFromSync = false;
       notifyListeners();
+    }
+  }
+
+  String _accountsSignature() => accounts
+      .map(
+        (account) =>
+            '${account.id}:${account.updatedAt?.millisecondsSinceEpoch}',
+      )
+      .join(',');
+
+  bool _dashboardStillCurrent(
+    int requestId,
+    int accountId,
+    DateTime? accountVersion,
+    String range,
+    DateTime? rangeFrom,
+    DateTime? rangeTo,
+  ) {
+    final account = activeAccount;
+    return requestId == _dashboardRequest &&
+        account?.id == accountId &&
+        account?.updatedAt == accountVersion &&
+        account?.hasToken == true &&
+        dashboardRange == range &&
+        customRangeFrom == rangeFrom &&
+        customRangeTo == rangeTo;
+  }
+
+  ({int? fromMs, int? toMs}) _rangeBounds(
+    String range,
+    DateTime? customFrom,
+    DateTime? customTo,
+  ) {
+    final now = DateTime.now();
+    switch (range) {
+      case 'today':
+        return (
+          fromMs: DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+          toMs: null,
+        );
+      case '7d':
+        return (
+          fromMs: now.subtract(const Duration(days: 7)).millisecondsSinceEpoch,
+          toMs: null,
+        );
+      case '30d':
+        return (
+          fromMs: now.subtract(const Duration(days: 30)).millisecondsSinceEpoch,
+          toMs: null,
+        );
+      case 'custom':
+        if (customFrom == null || customTo == null) {
+          return (fromMs: null, toMs: null);
+        }
+        return (
+          fromMs: DateTime(
+            customFrom.year,
+            customFrom.month,
+            customFrom.day,
+          ).millisecondsSinceEpoch,
+          toMs: DateTime(
+            customTo.year,
+            customTo.month,
+            customTo.day + 1,
+          ).millisecondsSinceEpoch,
+        );
+      default:
+        return (fromMs: null, toMs: null);
     }
   }
 
@@ -253,13 +429,20 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       dailyBudgetUsd: settings.dailyBudgetUsd,
       currency: currency,
       usdCny: usdCny,
+      quotaAlertPercent: settings.quotaAlertPercent,
+      budgetAlertPercent: settings.budgetAlertPercent,
+      quietHoursEnabled: settings.quietHoursEnabled,
     );
   }
 
   Future<void> _refreshQuota(Account account, bool force) async {
+    final accountVersion = account.updatedAt;
     try {
       final quota = await syncService.quotaFor(account, force: force);
-      if (activeAccount?.id != account.id) return;
+      if (activeAccount?.id != account.id ||
+          activeAccount?.updatedAt != accountVersion) {
+        return;
+      }
       final current = dashboard;
       if (current == null) return;
       dashboard = current.copyWith(quota: quota);
@@ -272,6 +455,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> refreshOverviews() async {
+    final requestId = ++_overviewRequest;
+    final signature = _accountsSignature();
     final result = <AccountOverview>[];
     for (final account in accounts) {
       if (!account.hasToken) continue;
@@ -288,13 +473,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
             today: today,
             todayTrend: todayTrend,
             daily7: daily7,
-            lastSyncAt: sync.lastSyncAt,
+            lastSyncAt: sync.lastSuccessOrAttempt,
             lastSyncStatus: sync.lastSyncStatus,
           ),
         );
       } catch (_) {
         // One broken account must not hide the others.
       }
+    }
+    if (requestId != _overviewRequest || signature != _accountsSignature()) {
+      return;
     }
     overviews = result;
     notifyListeners();
@@ -315,9 +503,28 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void navigateRecords(RecordsNavigationRequest request) {
+    recordsNavigation.value = request;
+  }
+
   Future<void> setRange(String range) async {
     if (dashboardRange == range) return;
     dashboardRange = range;
+    notifyListeners();
+    await refreshDashboard();
+  }
+
+  Future<void> setCustomRange(DateTime from, DateTime to) async {
+    var start = DateTime(from.year, from.month, from.day);
+    var end = DateTime(to.year, to.month, to.day);
+    if (end.isBefore(start)) {
+      final swap = start;
+      start = end;
+      end = swap;
+    }
+    customRangeFrom = start;
+    customRangeTo = end;
+    dashboardRange = 'custom';
     notifyListeners();
     await refreshDashboard();
   }
@@ -332,15 +539,26 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await _logSync(result, full ? 'full' : 'incremental');
     lastSyncResult = result;
     if (result.ok) {
+      authRequired = false;
+      if (result.partial && result.error != null) {
+        errorMessage = result.error;
+        _errorFromSync = true;
+      } else {
+        errorMessage = null;
+        _errorFromSync = false;
+      }
       try {
         keyNames = await settingsRepo.getKeyNames();
         await refreshDashboard(forceQuota: true);
         await refreshOverviews();
       } catch (e) {
         errorMessage = e.toString();
+        _errorFromSync = false;
       }
     } else {
       errorMessage = result.error;
+      _errorFromSync = true;
+      authRequired = result.authRequired;
     }
     notifyListeners();
     return result;
@@ -351,6 +569,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (token.isEmpty) {
       throw const OpenCodeApiException('Cookie 为空');
     }
+    authRequired = false;
+    errorMessage = null;
+    _errorFromSync = false;
     final workspace = await api.resolveWorkspace('Default', token);
     final account = await accountRepo.addAccount(
       token: token,
@@ -380,7 +601,21 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (token.isEmpty) {
       throw const OpenCodeApiException('Cookie 为空');
     }
+    authRequired = false;
+    errorMessage = null;
+    _errorFromSync = false;
     final workspace = await api.resolveWorkspace('Default', token);
+    final currentWorkspace =
+        account.resolvedWorkspaceId ?? account.workspaceHint;
+    if (account.resolvedWorkspaceId != null &&
+        currentWorkspace != workspace.id) {
+      // Never merge a different workspace's history into this account. The
+      // login UI catches this and offers to add a separate account.
+      throw WorkspaceChangedException(
+        currentWorkspaceId: currentWorkspace,
+        nextWorkspaceId: workspace.id,
+      );
+    }
     await accountRepo.saveToken(account.id, token);
     await accountRepo.saveWorkspace(
       account.id,
@@ -402,19 +637,33 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       await _logSync(result, 'full');
       lastSyncResult = result;
       if (result.ok) {
+        authRequired = false;
+        if (result.partial && result.error != null) {
+          errorMessage = result.error;
+          _errorFromSync = true;
+        } else {
+          errorMessage = null;
+          _errorFromSync = false;
+        }
         keyNames = await settingsRepo.getKeyNames();
         await refreshDashboard(forceQuota: true);
         await refreshOverviews();
       } else {
         errorMessage = result.error;
+        _errorFromSync = true;
+        authRequired = result.authRequired;
       }
     } catch (e) {
       errorMessage = e.toString();
+      _errorFromSync = true;
     }
     notifyListeners();
   }
 
   Future<void> switchAccount(int accountId) async {
+    authRequired = false;
+    errorMessage = null;
+    _errorFromSync = false;
     await accountRepo.setActive(accountId);
     await reloadAccounts();
     syncService.clearQuotaCache();
@@ -430,6 +679,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> deleteAccount(int accountId) async {
+    authRequired = false;
+    errorMessage = null;
+    _errorFromSync = false;
     await accountRepo.deleteAccount(accountId);
     syncService.clearQuotaCache(accountId);
     await reloadAccounts();
@@ -452,6 +704,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> logoutAccount(int accountId) async {
+    authRequired = false;
+    errorMessage = null;
+    _errorFromSync = false;
     await accountRepo.logoutAccount(accountId);
     syncService.clearQuotaCache(accountId);
     await reloadAccounts();
@@ -480,17 +735,36 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       autoSync: autoSync,
       showAccountsPanel: showAccountsPanel,
     );
-    settings = await settingsRepo.saveSettings(next);
+    // Apply locally before awaiting so two quick toggles build on each other
+    // instead of both starting from the previous snapshot.
+    settings = next;
     startAutoSync();
     notifyListeners();
+    await settingsRepo.saveSettings(next);
   }
 
-  ({int? fromMs, int? toMs, String? label}) _previousRange() {
+  ({int? fromMs, int? toMs, String? label}) _previousRange(
+    String range, {
+    DateTime? customFrom,
+    DateTime? customTo,
+  }) {
     final now = DateTime.now();
-    switch (dashboardRange) {
+    if (range == 'custom' && customFrom != null && customTo != null) {
+      final start = DateTime(customFrom.year, customFrom.month, customFrom.day);
+      final end = DateTime(customTo.year, customTo.month, customTo.day + 1);
+      final span = end.difference(start);
+      return (
+        fromMs: start.subtract(span).millisecondsSinceEpoch,
+        toMs: start.millisecondsSinceEpoch,
+        label: 'previousPeriod',
+      );
+    }
+    switch (range) {
       case 'today':
         final todayStart = DateTime(now.year, now.month, now.day);
-        final prevStart = todayStart.subtract(const Duration(days: 1));
+        // Calendar arithmetic, not Duration(days: 1): DST days are 23/25
+        // hours long and can land on the wrong local date.
+        final prevStart = DateTime(now.year, now.month, now.day - 1);
         return (
           fromMs: prevStart.millisecondsSinceEpoch,
           toMs: todayStart.millisecondsSinceEpoch,
@@ -532,10 +806,83 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Merges usage history from a `.db` backup into the active account. Tokens
   /// stay untouched because backups never contain credentials.
+  Future<int> databaseSizeBytes() async {
+    var total = 0;
+    for (final suffix in const ['', '-wal', '-shm']) {
+      try {
+        final file = File('${db.db.path}$suffix');
+        if (await file.exists()) total += await file.length();
+      } catch (_) {
+        // A missing sidecar file is normal.
+      }
+    }
+    return total;
+  }
+
+  Future<int> cleanupTempFiles() async {
+    final dir = await getTemporaryDirectory();
+    var deleted = 0;
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final name = p.basename(entity.path);
+      if (!name.startsWith('quotaroom-')) continue;
+      try {
+        await entity.delete();
+        deleted++;
+      } catch (_) {
+        // A file still held by the share sheet can be skipped.
+      }
+    }
+    return deleted;
+  }
+
+  Future<String> checkDatabaseIntegrity() async {
+    final rows = await db.db.rawQuery('PRAGMA integrity_check');
+    if (rows.isEmpty) return 'unknown';
+    return rows.first.values.first?.toString() ?? 'unknown';
+  }
+
+  Future<void> compactDatabase() async {
+    await db.db.execute('VACUUM');
+  }
+
+  Future<int> clearActiveAccountUsage() async {
+    final account = activeAccount;
+    if (account == null) {
+      throw const OpenCodeApiException('没有可清理数据的账号');
+    }
+    if (syncing) {
+      throw const OpenCodeApiException('同步进行中，请稍后再清理');
+    }
+    final deleted = await db.db.transaction((txn) async {
+      final count = await txn.delete(
+        'usage_records',
+        where: 'account_id = ?',
+        whereArgs: [account.id],
+      );
+      await txn.delete(
+        'usage_sync_state',
+        where: 'account_id = ?',
+        whereArgs: [account.id],
+      );
+      return count;
+    });
+    syncService.clearQuotaCache(account.id);
+    errorMessage = null;
+    _errorFromSync = false;
+    await refreshDashboard(forceQuota: true);
+    await refreshOverviews();
+    notifyListeners();
+    return deleted;
+  }
+
   Future<int> restoreUsageFromBackup(List<int> bytes) async {
     final account = activeAccount;
     if (account == null) {
       throw const OpenCodeApiException('没有可恢复数据的账号');
+    }
+    if (syncing) {
+      throw const OpenCodeApiException('同步进行中，请稍后再恢复备份');
     }
     final service = ExportService(db: db.db, usage: usageRepo);
     final restored = await service.restoreUsageFromBytes(account.id, bytes);
@@ -587,8 +934,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       dailyBudgetUsd: value,
       clearDailyBudget: value == null,
     );
-    settings = await settingsRepo.saveSettings(next);
+    settings = next;
     notifyListeners();
+    await settingsRepo.saveSettings(next);
   }
 
   Future<bool> setNotificationsEnabled(bool value) async {
@@ -597,8 +945,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       enabled = false;
     }
     final next = settings.copyWith(notificationsEnabled: enabled);
-    settings = await settingsRepo.saveSettings(next);
+    settings = next;
     notifyListeners();
+    await settingsRepo.saveSettings(next);
     return enabled;
   }
 
@@ -606,10 +955,36 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     return notifications.showTest(language: language);
   }
 
+  Future<void> setQuotaAlertPercent(int value) async {
+    final next = settings.copyWith(
+      quotaAlertPercent: value.clamp(1, 90).toInt(),
+    );
+    settings = next;
+    notifyListeners();
+    await settingsRepo.saveSettings(next);
+  }
+
+  Future<void> setBudgetAlertPercent(int value) async {
+    final next = settings.copyWith(
+      budgetAlertPercent: value.clamp(1, 100).toInt(),
+    );
+    settings = next;
+    notifyListeners();
+    await settingsRepo.saveSettings(next);
+  }
+
+  Future<void> setQuietHoursEnabled(bool value) async {
+    final next = settings.copyWith(quietHoursEnabled: value);
+    settings = next;
+    notifyListeners();
+    await settingsRepo.saveSettings(next);
+  }
+
   Future<void> setAmoled(bool value) async {
     final next = settings.copyWith(amoled: value);
-    settings = await settingsRepo.saveSettings(next);
+    settings = next;
     notifyListeners();
+    await settingsRepo.saveSettings(next);
   }
 
   Future<void> setWindowDays(int? value) async {
@@ -617,13 +992,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       windowDays: value,
       clearWindowDays: value == null,
     );
-    settings = await settingsRepo.saveSettings(next);
+    settings = next;
     notifyListeners();
+    await settingsRepo.saveSettings(next);
   }
 
   Future<void> setLanguage(String value) async {
-    language = value == 'en' ? 'en' : 'zh';
-    await prefs.setLanguage(language);
+    languagePreference = switch (value) {
+      'en' => 'en',
+      'zh' => 'zh',
+      _ => 'system',
+    };
+    language = _resolveLanguage(languagePreference);
+    await prefs.setLanguage(languagePreference);
+    notifyListeners();
+    unawaited(DesktopShell.instance.refreshTray());
+    unawaited(_publishWidget());
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (languagePreference != 'system') return;
+    final next = _resolveLanguage('system');
+    if (next == language) return;
+    language = next;
     notifyListeners();
     unawaited(_publishWidget());
   }
@@ -673,8 +1065,19 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    unawaited(_refreshAfterResume());
+    if (state == AppLifecycleState.resumed) {
+      startAutoSync();
+      unawaited(_refreshAfterResume());
+      return;
+    }
+    // Android's WorkManager owns background sync. Keeping the foreground
+    // timer alive while paused only duplicates API traffic.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _autoSyncTimer?.cancel();
+      _autoSyncTimer = null;
+    }
   }
 
   Future<void> _refreshAfterResume() async {
@@ -689,16 +1092,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (account == null) return;
     try {
       final persisted = await usageRepo.syncState(account.id);
-      final current = dashboard?.sync.lastSyncAt;
+      final current = dashboard?.sync.lastSuccessOrAttempt;
       if (current == null ||
-          (persisted.lastSyncAt?.isAfter(current) ?? false)) {
+          (persisted.lastSuccessOrAttempt?.isAfter(current) ?? false)) {
         await refreshDashboard();
       }
     } catch (_) {
       // The regular sync below will retry.
     }
     if (!settings.autoSync || syncing) return;
-    final last = dashboard?.sync.lastSyncAt;
+    final last = dashboard?.sync.lastSuccessOrAttempt;
     final interval = Duration(
       seconds: settings.syncIntervalSec.clamp(30, 3600).toInt(),
     );
@@ -714,7 +1117,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final today = DateTime(now.year, now.month, now.day);
     final result = <DailyStat>[];
     for (var i = days - 1; i >= 0; i--) {
-      final day = today.subtract(Duration(days: i));
+      final day = DateTime(today.year, today.month, today.day - i);
       final key =
           '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
       result.add(byDate[key] ?? DailyStat(date: key));
@@ -727,6 +1130,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _autoSyncTimer?.cancel();
     _progressSubscription?.cancel();
+    recordsNavigation.dispose();
     syncService.dispose();
     super.dispose();
   }

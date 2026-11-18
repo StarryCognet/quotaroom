@@ -15,6 +15,9 @@ class FlutterWindow : public Win32Window {
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
 
+  // Keeps the window hidden after the first frame (autostart --hidden).
+  void SetStartHidden(bool hidden) { start_hidden_ = hidden; }
+
  protected:
   // Win32Window:
   bool OnCreate() override;
@@ -28,6 +31,8 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  bool start_hidden_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

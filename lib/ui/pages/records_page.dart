@@ -7,12 +7,16 @@ import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
+import '../../data/export_service.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
+import '../../state/records_navigation.dart';
 import '../prism/app_glyphs.dart';
 import '../prism/keep_alive_page.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
+import '../widgets/detail_sheets.dart';
+import '../widgets/export_helper.dart';
 import '../widgets/skeleton.dart';
 
 class KeyFilterSelection {
@@ -34,12 +38,55 @@ class _RecordsPageState extends State<RecordsPage>
   late final TabController _tabsController;
   int _lastIndex = 0;
   final ValueNotifier<KeyFilterSelection?> _keyFilter = ValueNotifier(null);
+  final ValueNotifier<RecordsFilterRequest?> _filterRequest = ValueNotifier(
+    null,
+  );
+  AppState? _navState;
+  bool _handlingNavigation = false;
 
   @override
   void initState() {
     super.initState();
     _tabsController = TabController(length: 3, vsync: this);
     _tabsController.addListener(_onTabsChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = context.read<AppState>();
+    if (identical(_navState, state)) return;
+    _navState?.recordsNavigation.removeListener(_handleNavigation);
+    _navState = state;
+    state.recordsNavigation.addListener(_handleNavigation);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleNavigation();
+    });
+  }
+
+  void _handleNavigation() {
+    final state = _navState;
+    final request = state?.recordsNavigation.value;
+    if (state == null || request == null || _handlingNavigation) return;
+    _handlingNavigation = true;
+    state.recordsNavigation.value = null;
+    final tab = request.tabIndex.clamp(0, 2);
+    if (_tabsController.index != tab) {
+      _tabsController.animateTo(tab);
+    }
+    if (request.keyId != null ||
+        request.query.isNotEmpty ||
+        request.model.isNotEmpty ||
+        request.days != null) {
+      _filterRequest.value = RecordsFilterRequest(
+        query: request.query,
+        model: request.model,
+        days: request.days,
+        keyId: request.keyId,
+        keyName: request.keyName,
+      );
+    }
+    _handlingNavigation = false;
   }
 
   void _onTabsChanged() {
@@ -50,8 +97,10 @@ class _RecordsPageState extends State<RecordsPage>
 
   @override
   void dispose() {
+    _navState?.recordsNavigation.removeListener(_handleNavigation);
     _tabsController.dispose();
     _keyFilter.dispose();
+    _filterRequest.dispose();
     super.dispose();
   }
 
@@ -85,7 +134,12 @@ class _RecordsPageState extends State<RecordsPage>
             physics: const NeverScrollableScrollPhysics(),
             children: [
               const KeepAlivePage(child: _SessionsTab()),
-              KeepAlivePage(child: _RecordsTab(keyFilter: _keyFilter)),
+              KeepAlivePage(
+                child: _RecordsTab(
+                  keyFilter: _keyFilter,
+                  filterRequest: _filterRequest,
+                ),
+              ),
               KeepAlivePage(child: _KeyTab(onSelectKey: _selectKey)),
             ],
           ),
@@ -166,6 +220,8 @@ class _SessionsTabState extends State<_SessionsTab> {
   bool _loading = false;
   bool _loadingMore = false;
   String? _error;
+  bool _pendingSyncReload = false;
+  bool _failedReset = false;
 
   @override
   void initState() {
@@ -206,18 +262,30 @@ class _SessionsTabState extends State<_SessionsTab> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _reload();
         });
+      } else {
+        // Don't advance past this sync silently; reload when the user
+        // returns to the top instead of leaving the list stale forever.
+        _pendingSyncReload = true;
       }
     }
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients || _loading || _loadingMore || _error != null) {
+    if (!_scroll.hasClients) return;
+    if (_pendingSyncReload && _scroll.offset <= 80) {
+      _pendingSyncReload = false;
+      _reload();
       return;
     }
+    if (_loading || _loadingMore || _error != null) return;
     final position = _scroll.position;
     if (position.pixels >= position.maxScrollExtent - 260) {
       _loadMore();
     }
+  }
+
+  void _jumpToTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   Future<void> _reload() async {
@@ -233,7 +301,22 @@ class _SessionsTabState extends State<_SessionsTab> {
 
   void _retry() {
     setState(() => _error = null);
-    _loadMore();
+    if (_failedReset) {
+      _reload();
+    } else {
+      _loadMore();
+    }
+  }
+
+  void _scheduleAutoLoadMore() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _loading || _loadingMore || _error != null) return;
+      if (_items.length >= _total) return;
+      final position = _scroll.hasClients ? _scroll.position : null;
+      if (position == null || position.maxScrollExtent <= 0) {
+        _loadMore();
+      }
+    });
   }
 
   Future<void> _fetchPage(int page, {required bool reset}) async {
@@ -241,6 +324,7 @@ class _SessionsTabState extends State<_SessionsTab> {
     final account = state.activeAccount;
     if (account == null) return;
     final requestId = ++_requestId;
+    if (reset) _jumpToTop();
     setState(() {
       if (reset) {
         _loading = true;
@@ -268,13 +352,16 @@ class _SessionsTabState extends State<_SessionsTab> {
         _total = data.total;
         _loading = false;
         _loadingMore = false;
+        _failedReset = false;
       });
+      _scheduleAutoLoadMore();
     } catch (e) {
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _error = e.toString();
         _loading = false;
         _loadingMore = false;
+        _failedReset = reset;
       });
     }
   }
@@ -391,102 +478,110 @@ class _SessionCard extends StatelessWidget {
       dayAgo: l10n.t('dayAgo'),
     );
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 120),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
+      padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: PressSurface(
+        fill: const Color(0x00000000),
+        shape: AppShape.all(0),
+        padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
+        onPressed: () => showSessionDetail(context, state, session),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: ShapeDecoration(
+                      color: scheme.primaryContainer,
+                      shape: AppShape.all(AppCorner.xs),
+                    ),
+                    child: Text(
+                      keyLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyle.caption2
+                          .of(context, emphasized: true)
+                          .copyWith(color: scheme.primary),
+                    ),
                   ),
-                  decoration: ShapeDecoration(
-                    color: scheme.primaryContainer,
-                    shape: AppShape.all(AppCorner.xs),
-                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
                   child: Text(
-                    keyLabel,
+                    sessionLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyle.caption2
+                    style: AppTextStyle.caption1
                         .of(context, emphasized: true)
-                        .copyWith(color: scheme.primary),
+                        .copyWith(
+                          color: scheme.onSurface,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  sessionLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyle.caption1
-                      .of(context, emphasized: true)
-                      .copyWith(
-                        color: scheme.onSurface,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
+                const SizedBox(width: 6),
+                Text(
+                  last,
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                last,
-                style: AppTextStyle.caption2
-                    .of(context)
-                    .copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 5,
-            runSpacing: 5,
-            children: [
-              StatChip(
-                label: l10n.t('requests'),
-                value: fmtInt(session.requestCount),
-              ),
-              StatChip(
-                label: l10n.t('totalTokensShort'),
-                value: fmtTokens(session.totalTokens),
-              ),
-              StatChip(
-                label: l10n.t('input'),
-                value: fmtTokens(session.totalInputTokens),
-              ),
-              StatChip(
-                label: l10n.t('output'),
-                value: fmtTokens(session.totalOutputTokens),
-              ),
-              StatChip(
-                label: l10n.t('colReasoning'),
-                value: fmtTokens(session.totalReasoningTokens),
-              ),
-              StatChip(
-                label: l10n.t('totalCost'),
-                value: fmtMoney(
-                  session.totalCostUsd,
-                  currency: state.currency,
-                  rate: state.usdCny,
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                StatChip(
+                  label: l10n.t('requests'),
+                  value: fmtInt(session.requestCount),
                 ),
-                highlight: const Color(0xFFD97706),
-              ),
-            ],
-          ),
-        ],
+                StatChip(
+                  label: l10n.t('totalTokensShort'),
+                  value: fmtTokens(session.totalTokens),
+                ),
+                StatChip(
+                  label: l10n.t('input'),
+                  value: fmtTokens(session.totalInputTokens),
+                ),
+                StatChip(
+                  label: l10n.t('output'),
+                  value: fmtTokens(session.totalOutputTokens),
+                ),
+                StatChip(
+                  label: l10n.t('colReasoning'),
+                  value: fmtTokens(session.totalReasoningTokens),
+                ),
+                StatChip(
+                  label: l10n.t('totalCost'),
+                  value: fmtMoney(
+                    session.totalCostUsd,
+                    currency: state.currency,
+                    rate: state.usdCny,
+                  ),
+                  highlight: const Color(0xFFD97706),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _RecordsTab extends StatefulWidget {
-  const _RecordsTab({required this.keyFilter});
+  const _RecordsTab({required this.keyFilter, required this.filterRequest});
 
   final ValueNotifier<KeyFilterSelection?> keyFilter;
+  final ValueNotifier<RecordsFilterRequest?> filterRequest;
 
   @override
   State<_RecordsTab> createState() => _RecordsTabState();
@@ -512,6 +607,9 @@ class _RecordsTabState extends State<_RecordsTab> {
   String _query = '';
   int? _days;
   KeyFilterSelection? _selectedKey;
+  bool _pendingSyncReload = false;
+  bool _failedReset = false;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -519,6 +617,13 @@ class _RecordsTabState extends State<_RecordsTab> {
     _scroll.addListener(_onScroll);
     _selectedKey = widget.keyFilter.value;
     widget.keyFilter.addListener(_onKeyFilterChanged);
+    widget.filterRequest.addListener(_onFilterRequest);
+    final pending = widget.filterRequest.value;
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _applyFilterRequest(pending);
+      });
+    }
   }
 
   @override
@@ -528,18 +633,39 @@ class _RecordsTabState extends State<_RecordsTab> {
     _scroll.dispose();
     _search.dispose();
     widget.keyFilter.removeListener(_onKeyFilterChanged);
+    widget.filterRequest.removeListener(_onFilterRequest);
     super.dispose();
+  }
+
+  void _onFilterRequest() {
+    final request = widget.filterRequest.value;
+    if (request != null) _applyFilterRequest(request);
+  }
+
+  void _applyFilterRequest(RecordsFilterRequest request) {
+    final key = request.keyId == null
+        ? null
+        : KeyFilterSelection(keyId: request.keyId!, keyName: request.keyName);
+    _selectedKey = key;
+    if (widget.keyFilter.value?.keyId != key?.keyId) {
+      widget.keyFilter.removeListener(_onKeyFilterChanged);
+      widget.keyFilter.value = key;
+      widget.keyFilter.addListener(_onKeyFilterChanged);
+    }
+    _searchDebounce?.cancel();
+    _search.text = request.query;
+    _query = request.query;
+    _model = request.model;
+    _days = request.days;
+    _beginReset();
+    _reload();
   }
 
   void _onKeyFilterChanged() {
     final value = widget.keyFilter.value;
     if (value == _selectedKey) return;
-    setState(() {
-      _selectedKey = value;
-      _page = 0;
-      _total = 0;
-      _items.clear();
-    });
+    _selectedKey = value;
+    _beginReset();
     _reload();
   }
 
@@ -579,18 +705,44 @@ class _RecordsTabState extends State<_RecordsTab> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _reload();
         });
+      } else {
+        // Reload when the user scrolls back to the top; advancing the marker
+        // here used to leave the list stale until the next sync.
+        _pendingSyncReload = true;
       }
     }
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients || _loading || _loadingMore || _error != null) {
+    if (!_scroll.hasClients) return;
+    if (_pendingSyncReload && _scroll.offset <= 80) {
+      _pendingSyncReload = false;
+      _reload();
       return;
     }
+    if (_loading || _loadingMore || _error != null) return;
     final position = _scroll.position;
     if (position.pixels >= position.maxScrollExtent - 260) {
       _loadMore();
     }
+  }
+
+  void _jumpToTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  void _beginReset() {
+    _pendingSyncReload = false;
+    _failedReset = false;
+    setState(() {
+      _page = 0;
+      _total = 0;
+      _items.clear();
+      _loading = true;
+      _loadingMore = false;
+      _error = null;
+    });
+    _jumpToTop();
   }
 
   Future<void> _reload() async {
@@ -606,7 +758,22 @@ class _RecordsTabState extends State<_RecordsTab> {
 
   void _retry() {
     setState(() => _error = null);
-    _loadMore();
+    if (_failedReset) {
+      _reload();
+    } else {
+      _loadMore();
+    }
+  }
+
+  void _scheduleAutoLoadMore() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _loading || _loadingMore || _error != null) return;
+      if (_items.length >= _total) return;
+      final position = _scroll.hasClients ? _scroll.position : null;
+      if (position == null || position.maxScrollExtent <= 0) {
+        _loadMore();
+      }
+    });
   }
 
   Future<void> _fetchPage(int page, {required bool reset}) async {
@@ -614,6 +781,7 @@ class _RecordsTabState extends State<_RecordsTab> {
     final account = state.activeAccount;
     if (account == null) return;
     final requestId = ++_requestId;
+    if (reset) _jumpToTop();
     setState(() {
       if (reset) {
         _loading = true;
@@ -650,13 +818,16 @@ class _RecordsTabState extends State<_RecordsTab> {
         _total = data.total;
         _loading = false;
         _loadingMore = false;
+        _failedReset = false;
       });
+      _scheduleAutoLoadMore();
     } catch (e) {
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _error = e.toString();
         _loading = false;
         _loadingMore = false;
+        _failedReset = reset;
       });
     }
   }
@@ -673,12 +844,8 @@ class _RecordsTabState extends State<_RecordsTab> {
       if (!mounted) return;
       final next = value.trim();
       if (next == _query) return;
-      setState(() {
-        _query = next;
-        _page = 0;
-        _total = 0;
-        _items.clear();
-      });
+      _query = next;
+      _beginReset();
       _reload();
     });
   }
@@ -687,29 +854,72 @@ class _RecordsTabState extends State<_RecordsTab> {
     _searchDebounce?.cancel();
     _search.clear();
     if (_query.isEmpty) return;
-    setState(() {
-      _query = '';
-      _page = 0;
-      _total = 0;
-      _items.clear();
-    });
+    _query = '';
+    _beginReset();
     _reload();
   }
 
   void _setDays(String value) {
     final days = value == 'all' ? null : int.tryParse(value);
     if (days == _days) return;
-    setState(() {
-      _days = days;
-      _page = 0;
-      _total = 0;
-      _items.clear();
-    });
+    _days = days;
+    _beginReset();
     _reload();
   }
 
   void _clearKeyFilter() {
     widget.keyFilter.value = null;
+  }
+
+  bool get _hasFilters =>
+      _query.isNotEmpty ||
+      _model.isNotEmpty ||
+      _days != null ||
+      _selectedKey != null;
+
+  void _clearFilters() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    _query = '';
+    _model = '';
+    _days = null;
+    final hadKey = widget.keyFilter.value != null;
+    // The notifier listener resets and reloads; only do it here when no key
+    // filter was set, otherwise a duplicate request would be issued.
+    widget.keyFilter.value = null;
+    if (!hadKey) {
+      _beginReset();
+      _reload();
+    }
+  }
+
+  Future<void> _exportRecords() async {
+    if (_exporting) return;
+    final state = context.read<AppState>();
+    final account = state.activeAccount;
+    if (account == null) return;
+    setState(() => _exporting = true);
+    try {
+      final service = ExportService(db: state.db.db, usage: state.usageRepo);
+      final file = await service.exportRecordsCsv(
+        account.id,
+        state.keyNames,
+        model: _model.isEmpty ? null : _model,
+        days: _days,
+        keyId: _selectedKey?.keyId,
+        query: _query.isEmpty ? null : _query,
+      );
+      if (!mounted) return;
+      await saveOrShareExport(
+        context,
+        file: file,
+        shareText: 'QuotaRoom · ${account.name} records',
+      );
+    } catch (e) {
+      if (mounted) showExportError(context, e);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _pickModel() async {
@@ -721,12 +931,8 @@ class _RecordsTabState extends State<_RecordsTab> {
           _ModelPicker(models: _models, selected: _model, l10n: l10n),
     );
     if (selected == null || !mounted) return;
-    setState(() {
-      _model = selected;
-      _page = 0;
-      _total = 0;
-      _items.clear();
-    });
+    _model = selected;
+    _beginReset();
     await _reload();
   }
 
@@ -735,16 +941,6 @@ class _RecordsTabState extends State<_RecordsTab> {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final scheme = context.colorScheme;
-    if (_loading && _items.isEmpty) {
-      return const ListSkeleton();
-    }
-    if (_error != null && _items.isEmpty) {
-      return ErrorState(
-        message: '${l10n.t('loadFailed')}: $_error',
-        retryLabel: l10n.t('retry'),
-        onRetry: _reload,
-      );
-    }
     final header = Column(
       children: [
         Padding(
@@ -758,6 +954,7 @@ class _RecordsTabState extends State<_RecordsTab> {
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
+                      tooltip: l10n.t('clearSearch'),
                       icon: const GlyphIcon(AppGlyphs.clearField, size: 17),
                       onPressed: _clearSearch,
                     ),
@@ -776,6 +973,13 @@ class _RecordsTabState extends State<_RecordsTab> {
                       .of(context)
                       .copyWith(color: scheme.onSurfaceVariant),
                 ),
+              ),
+              IconButton(
+                onPressed: _exporting ? null : _exportRecords,
+                tooltip: l10n.t('exportRecords'),
+                icon: _exporting
+                    ? const ActivityIndicator(size: 16)
+                    : const GlyphIcon(AppGlyphs.export, size: 18),
               ),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 190),
@@ -823,64 +1027,73 @@ class _RecordsTabState extends State<_RecordsTab> {
           ),
       ],
     );
+
+    // The header stays mounted while loading or when a query errors. The old
+    // build replaced the whole tab with a skeleton/error, which blurred the
+    // search field and made filters impossible to clear after a failure.
+    final Widget body;
     if (_items.isEmpty) {
-      return Column(
-        children: [
-          header,
-          Expanded(
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                16,
-                24,
-                16,
-                24 + context.bottomInset,
-              ),
-              children: [
-                EmptyState(
-                  glyph: AppGlyphs.requests,
-                  title: l10n.t('emptyRecords'),
-                  subtitle: l10n.t('syncHint'),
-                  action: FilledButton(
-                    onPressed: _refresh,
-                    child: Text(l10n.t('refresh')),
-                  ),
-                ),
-              ],
+      if (_loading) {
+        body = const ListSkeleton();
+      } else if (_error != null) {
+        body = ErrorState(
+          message: '${l10n.t('loadFailed')}: $_error',
+          retryLabel: l10n.t('retry'),
+          onRetry: _reload,
+        );
+      } else {
+        body = ListView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(16, 24, 16, 24 + context.bottomInset),
+          children: [
+            EmptyState(
+              glyph: AppGlyphs.requests,
+              title: l10n.t(_hasFilters ? 'emptyFiltered' : 'emptyRecords'),
+              subtitle: l10n.t(_hasFilters ? 'emptyFilteredHint' : 'syncHint'),
+              action: _hasFilters
+                  ? OutlinedButton(
+                      onPressed: _clearFilters,
+                      child: Text(l10n.t('clearFilters')),
+                    )
+                  : FilledButton(
+                      onPressed: _refresh,
+                      child: Text(l10n.t('refresh')),
+                    ),
             ),
-          ),
-        ],
+          ],
+        );
+      }
+    } else {
+      body = ListView.separated(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + context.bottomInset),
+        itemCount: _items.length + 1,
+        separatorBuilder: (context, index) => const SizedBox(height: 7),
+        itemBuilder: (context, index) {
+          if (index == _items.length) {
+            return _InfiniteFooter(
+              loading: _loadingMore,
+              error: _error,
+              hasMore: _items.length < _total,
+              onRetry: _retry,
+              l10n: l10n,
+            );
+          }
+          final record = _items[index];
+          return _RecordCard(
+            record: record,
+            state: state,
+            keyName: state.keyNames[record.keyId] ?? '',
+          );
+        },
       );
     }
     return Column(
       children: [
         header,
-        Expanded(
-          child: ListView.separated(
-            controller: _scroll,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + context.bottomInset),
-            itemCount: _items.length + 1,
-            separatorBuilder: (context, index) => const SizedBox(height: 7),
-            itemBuilder: (context, index) {
-              if (index == _items.length) {
-                return _InfiniteFooter(
-                  loading: _loadingMore,
-                  error: _error,
-                  hasMore: _items.length < _total,
-                  onRetry: _retry,
-                  l10n: l10n,
-                );
-              }
-              final record = _items[index];
-              return _RecordCard(
-                record: record,
-                state: state,
-                keyName: state.keyNames[record.keyId] ?? '',
-              );
-            },
-          ),
-        ),
+        Expanded(child: body),
       ],
     );
   }

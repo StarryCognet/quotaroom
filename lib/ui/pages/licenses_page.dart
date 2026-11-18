@@ -11,10 +11,17 @@ import '../widgets/common.dart';
 
 /// Shows the GPL-3.0 text and third-party notices bundled as `assets/LICENSE`,
 /// including the upstream GoGauge MIT notice and FlClash / prism_ui credits.
-class OpenSourceLicensesPage extends StatelessWidget {
+class OpenSourceLicensesPage extends StatefulWidget {
   const OpenSourceLicensesPage({super.key});
 
   static const _upstreamUrl = 'https://github.com/yphyphyph/opencode-go-gauge';
+
+  @override
+  State<OpenSourceLicensesPage> createState() => _OpenSourceLicensesPageState();
+}
+
+class _OpenSourceLicensesPageState extends State<OpenSourceLicensesPage> {
+  late final Future<String> _license = rootBundle.loadString('assets/LICENSE');
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +45,12 @@ class OpenSourceLicensesPage extends StatelessWidget {
         ),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          context.appBarInset + 8,
+          16,
+          24 + context.bottomInset,
+        ),
         children: [
           AppCard(
             child: Column(
@@ -88,7 +100,7 @@ class OpenSourceLicensesPage extends StatelessWidget {
           const SizedBox(height: 12),
           AppCard(
             child: FutureBuilder<String>(
-              future: rootBundle.loadString('assets/LICENSE'),
+              future: _license,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return Padding(
@@ -161,7 +173,7 @@ class OpenSourceLicensesPage extends StatelessWidget {
     final l10n = context.read<AppState>().l10n;
     try {
       final ok = await launchUrl(
-        Uri.parse(_upstreamUrl),
+        Uri.parse(OpenSourceLicensesPage._upstreamUrl),
         mode: LaunchMode.externalApplication,
       );
       if (!ok && context.mounted) {

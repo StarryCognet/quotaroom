@@ -112,6 +112,21 @@ void main() {
     expect(trend[11].input, 0);
   });
 
+  test(
+    'dailyStats window contains exactly the requested number of days',
+    () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day, 12);
+      await repo.insertUsageRecords([
+        _rec(id: 'inside', at: today),
+        _rec(id: 'edge', at: DateTime(now.year, now.month, now.day - 7, 12)),
+      ], accountId);
+      final daily = await repo.dailyStats(accountId, 7);
+      expect(daily, hasLength(1));
+      expect(daily.single.requestCount, 1);
+    },
+  );
+
   test('sessions group by session, then key, and blank key ids', () async {
     final now = DateTime.now();
     await repo.insertUsageRecords([
@@ -304,5 +319,53 @@ void main() {
     expect(query.records.single.usgId, 'b');
     final modelQuery = await repo.recordsPage(accountId, query: 'qwen');
     expect(modelQuery.total, 1);
+  });
+
+  test('sync lease is exclusive and can be renewed or released', () async {
+    expect(await repo.acquireSyncLease('owner-a'), isTrue);
+    expect(await repo.acquireSyncLease('owner-b'), isFalse);
+    expect(await repo.renewSyncLease('owner-b'), isFalse);
+    expect(await repo.renewSyncLease('owner-a'), isTrue);
+    await repo.releaseSyncLease('owner-a');
+    expect(await repo.acquireSyncLease('owner-b'), isTrue);
+  });
+
+  test('sync state records last success separately from attempts', () async {
+    await repo.updateSyncState(accountId, status: 'error', error: 'boom');
+    var state = await repo.syncState(accountId);
+    expect(state.lastSyncAt, isNotNull);
+    expect(state.lastSuccessAt, isNull);
+
+    await repo.updateSyncState(accountId, status: 'ok');
+    state = await repo.syncState(accountId);
+    expect(state.lastSuccessAt, isNotNull);
+    expect(state.lastSuccessOrAttempt, state.lastSuccessAt);
+  });
+
+  test('allRecords and sessionsPage support the same filters', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'a', at: now, model: 'deepseek-v4', session: 'sess_a'),
+      _rec(id: 'b', at: now, model: 'glm', session: 'sess_b'),
+    ], accountId);
+    final byModel = await repo.allRecords(accountId, model: 'glm');
+    expect(byModel.single.usgId, 'b');
+    final byQuery = await repo.allRecords(accountId, query: 'sess_a');
+    expect(byQuery.single.usgId, 'a');
+    final sessions = await repo.sessionsPage(accountId, query: 'sess_b');
+    expect(sessions.records.single.sessionId, 'sess_b');
+  });
+
+  test('model daily stats stay inside the requested model', () async {
+    final now = DateTime.now();
+    await repo.insertUsageRecords([
+      _rec(id: 'a', at: now, model: 'deepseek-v4'),
+      _rec(id: 'b', at: now, model: 'glm'),
+    ], accountId);
+    final daily = await repo.modelDailyStats(accountId, 'glm', 7);
+    expect(daily, hasLength(1));
+    expect(daily.single.requestCount, 1);
+    final totals = await repo.totalsBetween(accountId, model: 'glm');
+    expect(totals.requestCount, 1);
   });
 }

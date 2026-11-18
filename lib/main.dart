@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'app.dart';
+import 'core/desktop_shell.dart';
 import 'core/platform.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
@@ -26,6 +27,14 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   } else {
     await initBackgroundSync();
+  }
+  // The native window must exist before the first frame so close-to-tray,
+  // window bounds and hidden autostart work consistently. A desktop plugin
+  // failure must not prevent the app from opening.
+  try {
+    await DesktopShell.instance.initialize();
+  } catch (error) {
+    debugPrint('QuotaRoom desktop shell init failed: $error');
   }
   try {
     final database = await AppDatabase.open();

@@ -14,8 +14,17 @@ class FxService {
   Future<double> usdCny({bool force = false}) async {
     final cached = await settings.getFxCache();
     final rate = cached.rate > 0 ? cached.rate : fallbackRate;
+    final now = DateTime.now();
     final at = cached.at;
-    if (!force && at != null && DateTime.now().difference(at) < ttl) {
+    if (!force && at != null && now.difference(at) < ttl) {
+      return rate;
+    }
+    // A failed fetch is retried after an hour, not on every launch, but it
+    // must not refresh the successful-fetch timestamp and hide stale data.
+    final attempted = cached.attemptedAt;
+    if (!force &&
+        attempted != null &&
+        now.difference(attempted) < const Duration(hours: 1)) {
       return rate;
     }
     try {
@@ -23,8 +32,7 @@ class FxService {
       await settings.saveFxRate(fresh);
       return fresh;
     } catch (_) {
-      // Mark the cached value as fresh to avoid hammering the FX endpoint.
-      await settings.saveFxRate(rate);
+      await settings.markFxAttempt();
       return rate;
     }
   }

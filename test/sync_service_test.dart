@@ -130,10 +130,77 @@ void main() {
         old.millisecondsSinceEpoch - SyncService.incrementalOverlapMs,
       );
       final state = await usage.syncState(1);
-      expect(state.lastSyncStatus, 'ok');
+      // Cursor still points at older data after two empty pages, so the run
+      // must be reported as partial rather than a clean success.
+      expect(state.lastSyncStatus, 'partial');
       expect(state.totalRecords, 2);
     },
   );
+
+  test('pages containing only filtered rows do not end the sync', () async {
+    final now = DateTime.now().toUtc();
+    final api = _FakeApi({
+      'first': const UsagePage(rawItemCount: 1, nextCursor: 'c1'),
+      'c1': UsagePage(records: [_rec('real', now)]),
+    });
+    final service = SyncService(
+      accounts: accounts,
+      usage: usage,
+      settings: settings,
+      api: api,
+    );
+    final result = await service.syncIncremental();
+    expect(result.ok, isTrue);
+    expect(result.partial, isFalse);
+    expect(result.inserted, 1);
+    expect(api.calls, 2);
+  });
+
+  test('incremental sync does not stop at the old ten-page cap', () async {
+    final now = DateTime.now().toUtc();
+    final pages = <String, UsagePage>{};
+    for (var i = 0; i < 12; i++) {
+      pages[i == 0 ? 'first' : 'p$i'] = UsagePage(
+        records: [_rec('p$i', now)],
+        nextCursor: i < 11 ? 'p${i + 1}' : null,
+      );
+    }
+    final api = _FakeApi(pages);
+    final service = SyncService(
+      accounts: accounts,
+      usage: usage,
+      settings: settings,
+      api: api,
+    );
+    final result = await service.syncIncremental();
+    expect(result.ok, isTrue);
+    expect(result.partial, isFalse);
+    expect(result.inserted, 12);
+    expect(api.calls, 12);
+  });
+
+  test('one expired account does not abort the remaining accounts', () async {
+    await accounts.addAccount(
+      token: 'st_bad',
+      workspaceId: 'wrk_test',
+      name: 'Expired',
+    );
+    final now = DateTime.now().toUtc();
+    final api = _TokenAwareApi(now);
+    final service = SyncService(
+      accounts: accounts,
+      usage: usage,
+      settings: settings,
+      api: api,
+    );
+    final result = await service.syncIncremental();
+    expect(result.ok, isTrue);
+    expect(result.partial, isTrue);
+    expect(result.authRequired, isTrue);
+    expect(result.inserted, 1);
+    expect((await usage.syncState(1)).lastSyncStatus, 'ok');
+    expect((await usage.syncState(2)).lastSyncStatus, 'error');
+  });
 
   test('full sync stops at the window boundary and prunes', () async {
     await settings.saveSettings(const Settings(windowDays: 30));
@@ -189,6 +256,95 @@ void main() {
     await service.quotaFor(account);
     expect(api.quotaCalls, 1);
   });
+
+  test('a failed quota refresh keeps the last successful windows', () async {
+    final api = _FlakyQuotaApi();
+    final service = SyncService(
+      accounts: accounts,
+      usage: usage,
+      settings: settings,
+      api: api,
+    );
+    final account = (await accounts.getAccount(1))!;
+    final first = await service.quotaFor(account);
+    expect(first.success, isTrue);
+    final second = await service.quotaFor(account, force: true);
+    expect(second.success, isTrue);
+    expect(second.windows, isNotEmpty);
+    expect(service.peekQuota(1)?.success, isTrue);
+    // The short failure cache must not leak the failed result to callers
+    // while a last-good value exists.
+    final cached = await service.quotaFor(account);
+    expect(cached.success, isTrue);
+    expect(cached.windows, isNotEmpty);
+  });
+}
+
+class _TokenAwareApi extends OpenCodeApi {
+  _TokenAwareApi(this.now);
+
+  final DateTime now;
+
+  @override
+  Future<WorkspaceRef> resolveWorkspace(String hint, String token) async {
+    return const WorkspaceRef(id: 'wrk_test', name: 'Test');
+  }
+
+  @override
+  Future<UsagePage> fetchUsagePage(
+    String token,
+    String workspaceId, {
+    String? cursor,
+    int limit = 100,
+    int? sinceMs,
+  }) async {
+    if (token == 'st_bad') throw const AuthException();
+    return UsagePage(records: [_rec('good', now)]);
+  }
+
+  @override
+  Future<Map<String, String>> fetchKeyNames(
+    String token,
+    String workspaceId,
+  ) async => const {};
+}
+
+class _FlakyQuotaApi extends OpenCodeApi {
+  int calls = 0;
+
+  @override
+  Future<QuotaResult> fetchQuota(
+    String token, {
+    String workspaceHint = 'Default',
+  }) async {
+    calls++;
+    if (calls > 1) {
+      return QuotaResult(
+        name: 'Test',
+        workspaceId: 'wrk_test',
+        success: false,
+        updatedAt: DateTime.now().toUtc(),
+        error: 'network down',
+      );
+    }
+    return QuotaResult(
+      name: 'Test',
+      workspaceId: 'wrk_test',
+      success: true,
+      updatedAt: DateTime.now().toUtc(),
+      windows: const [
+        QuotaWindow(
+          label: '5h Rolling',
+          used: 1,
+          remaining: 99,
+          total: 100,
+          unit: '%',
+          resetAt: null,
+          resetInSec: 100,
+        ),
+      ],
+    );
+  }
 }
 
 class _CountingQuotaApi extends OpenCodeApi {

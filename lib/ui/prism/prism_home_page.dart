@@ -12,7 +12,11 @@ import '../../core/quota_pacing.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
 import '../widgets/charts.dart';
+import '../widgets/common.dart';
+import '../widgets/date_range_dialog.dart';
 import 'app_glyphs.dart';
+import 'prism_login_page.dart';
+import 'prism_route.dart';
 
 /// FlClash-style bento dashboard: quota windows, KPI tiles, budget and the
 /// 24-hour trend on one page.
@@ -31,7 +35,7 @@ class PrismHomePage extends StatelessWidget {
         label: l10n.t('noData'),
         description: l10n.t('syncHint'),
         action: FilledButton(
-          onPressed: () => state.refreshDashboard(forceQuota: true),
+          onPressed: () => state.syncNow(),
           child: Text(l10n.t('refresh')),
         ),
       );
@@ -45,22 +49,26 @@ class PrismHomePage extends StatelessWidget {
         24 + context.bottomInset,
       ),
       children: [
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: SegmentedControl<String>(
-              segments: [
-                ('today', l10n.t('today')),
-                ('7d', l10n.t('d7')),
-                ('30d', l10n.t('d30')),
-                ('all', l10n.t('all')),
-              ],
-              value: state.dashboardRange,
-              onChanged: state.setRange,
-            ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: RangeSelector(
+            value: state.dashboardRange,
+            onChanged: state.setRange,
+            l10n: l10n,
+            onCustom: () => showCustomRangeDialog(context, state),
+            customLabel: state.customRangeLabel,
           ),
         ),
+        if (state.dashboardRange == 'custom' &&
+            state.customRangeLabel != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            state.customRangeLabel!,
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ],
         if (state.progress.running) ...[
           const SizedBox(height: 12),
           _SyncCard(state: state),
@@ -178,23 +186,46 @@ class _ErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
+    final l10n = state.l10n;
     return Card(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GlyphIcon(AppGlyphs.warning, size: 18, color: colorScheme.error),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              state.errorMessage ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.listSubtitleStyle,
-            ),
+          Row(
+            children: [
+              GlyphIcon(AppGlyphs.warning, size: 18, color: colorScheme.error),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  state.errorMessage ?? '',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.listSubtitleStyle,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () => state.refreshDashboard(forceQuota: true),
-            child: Text(state.l10n.t('retry')),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => state.syncNow(),
+                child: Text(l10n.t('retry')),
+              ),
+              if (state.authRequired) ...[
+                const SizedBox(width: 6),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).push(
+                    prismPageRoute<void>(
+                      builder: (_) =>
+                          const PrismLoginPage(asRoute: true, relogin: true),
+                    ),
+                  ),
+                  child: Text(l10n.t('relogin')),
+                ),
+              ],
+            ],
           ),
         ],
       ),

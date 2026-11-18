@@ -61,10 +61,26 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
   }
 
   Future<void> _initialize() async {
-    await CookieBridge.clearCookies();
+    try {
+      await CookieBridge.clearCookies();
+    } catch (_) {
+      // A WebView cookie failure must not leave the page stuck on a spinner.
+    }
     if (!mounted) return;
     await _controller.loadRequest(Uri.parse(OpenCodeApi.loginUrl));
     if (mounted) setState(() => _ready = true);
+  }
+
+  Future<void> _handleBack() async {
+    try {
+      if (await _controller.canGoBack()) {
+        await _controller.goBack();
+        return;
+      }
+    } catch (_) {
+      // Fall through to closing the page.
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _onPageFinished(String url) async {
@@ -103,6 +119,8 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
         _cookiePoll?.cancel();
         if (mounted) Navigator.of(context).pop(token);
       }
+    } catch (_) {
+      // Polling is best-effort; the user can still paste the cookie manually.
     } finally {
       _capturing = false;
     }
@@ -133,7 +151,7 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
           color: SurfaceLevel.page.colorOf(context.colorScheme),
           child: AppBar(
             leading: IconButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _handleBack,
               icon: const GlyphIcon(AppGlyphs.chevronBack),
               tooltip: l10n.t('back'),
             ),

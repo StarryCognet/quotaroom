@@ -5,6 +5,7 @@ import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/package_info_cache.dart';
 import '../../core/platform.dart';
 import '../../state/app_state.dart';
 import '../prism/app_glyphs.dart';
@@ -44,7 +45,12 @@ class AboutPage extends StatelessWidget {
         ),
       ),
       body: ListView(
-        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          context.appBarInset + 8,
+          16,
+          24 + context.bottomInset,
+        ),
         children: [
           const Center(child: AppLogo(size: 68)),
           const SizedBox(height: 12),
@@ -65,7 +71,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
+            future: loadPackageInfo(),
             builder: (context, snapshot) {
               final version = snapshot.hasData
                   ? '${snapshot.data!.version} (${snapshot.data!.buildNumber})'

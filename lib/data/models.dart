@@ -187,11 +187,21 @@ class UsagePage {
     this.records = const [],
     this.nextCursor,
     this.retentionDays,
+    this.rawItemCount,
   });
 
   final List<UsageRecord> records;
   final String? nextCursor;
   final int? retentionDays;
+
+  /// Number of items returned by the server before local filtering. This is
+  /// what pagination must use to decide whether a page was empty; a page of
+  /// non-inference rows still proves the cursor advanced.
+  final int? rawItemCount;
+
+  int get totalRawItems => rawItemCount ?? records.length;
+
+  bool get hasRawItems => totalRawItems > 0;
 }
 
 class Totals {
@@ -392,6 +402,7 @@ class KeyStat {
 class SyncState {
   const SyncState({
     this.lastSyncAt,
+    this.lastSuccessAt,
     this.lastSyncStatus,
     this.lastSyncError,
     this.lastInsertedCount = 0,
@@ -400,13 +411,19 @@ class SyncState {
     this.newestRecordAt,
   });
 
+  /// Last attempt, successful or not.
   final DateTime? lastSyncAt;
+
+  /// Last attempt that produced usable data. UI freshness must use this.
+  final DateTime? lastSuccessAt;
   final String? lastSyncStatus;
   final String? lastSyncError;
   final int lastInsertedCount;
   final int totalRecords;
   final DateTime? oldestRecordAt;
   final DateTime? newestRecordAt;
+
+  DateTime? get lastSuccessOrAttempt => lastSuccessAt ?? lastSyncAt;
 
   static const empty = SyncState();
 }
@@ -459,6 +476,9 @@ class Settings {
     this.showAccountsPanel = false,
     this.dailyBudgetUsd,
     this.notificationsEnabled = false,
+    this.quotaAlertPercent = 20,
+    this.budgetAlertPercent = 80,
+    this.quietHoursEnabled = false,
     this.amoled = false,
   });
 
@@ -468,6 +488,9 @@ class Settings {
   final bool showAccountsPanel;
   final double? dailyBudgetUsd;
   final bool notificationsEnabled;
+  final int quotaAlertPercent;
+  final int budgetAlertPercent;
+  final bool quietHoursEnabled;
   final bool amoled;
 
   Settings copyWith({
@@ -479,6 +502,9 @@ class Settings {
     double? dailyBudgetUsd,
     bool clearDailyBudget = false,
     bool? notificationsEnabled,
+    int? quotaAlertPercent,
+    int? budgetAlertPercent,
+    bool? quietHoursEnabled,
     bool? amoled,
   }) => Settings(
     syncIntervalSec: syncIntervalSec ?? this.syncIntervalSec,
@@ -489,6 +515,9 @@ class Settings {
         ? null
         : (dailyBudgetUsd ?? this.dailyBudgetUsd),
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    quotaAlertPercent: quotaAlertPercent ?? this.quotaAlertPercent,
+    budgetAlertPercent: budgetAlertPercent ?? this.budgetAlertPercent,
+    quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
     amoled: amoled ?? this.amoled,
   );
 
@@ -512,6 +541,14 @@ class Settings {
       showAccountsPanel: json['show_accounts_panel'] == true,
       dailyBudgetUsd: budget != null && budget > 0 ? budget : null,
       notificationsEnabled: json['notifications_enabled'] == true,
+      quotaAlertPercent: ((json['quota_alert_percent'] as num?)?.toInt() ?? 20)
+          .clamp(1, 90)
+          .toInt(),
+      budgetAlertPercent:
+          ((json['budget_alert_percent'] as num?)?.toInt() ?? 80)
+              .clamp(1, 100)
+              .toInt(),
+      quietHoursEnabled: json['quiet_hours_enabled'] == true,
       amoled: json['amoled'] == true,
     );
   }
@@ -523,6 +560,9 @@ class Settings {
     'show_accounts_panel': showAccountsPanel,
     'daily_budget_usd': dailyBudgetUsd,
     'notifications_enabled': notificationsEnabled,
+    'quota_alert_percent': quotaAlertPercent,
+    'budget_alert_percent': budgetAlertPercent,
+    'quiet_hours_enabled': quietHoursEnabled,
     'amoled': amoled,
   };
 }
@@ -666,6 +706,7 @@ class SyncResult {
     this.pages = 0,
     this.error,
     this.partial = false,
+    this.authRequired = false,
   });
 
   final bool ok;
@@ -673,6 +714,10 @@ class SyncResult {
   final int pages;
   final String? error;
   final bool partial;
+
+  /// At least one account rejected its cookie. The UI can offer a one-tap
+  /// re-login instead of a retry that is guaranteed to fail.
+  final bool authRequired;
 }
 
 class LoginResult {

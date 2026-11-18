@@ -7,26 +7,43 @@ import '../../core/platform.dart';
 /// Prism_ui form sheet shared by the login page and the Android WebView
 /// fallback. Desktop gets a centered form sheet; mobile gets a snapping
 /// bottom sheet.
-Future<String?> showPasteCookieSheet(BuildContext context, L10n l10n) {
+Future<String?> showPasteCookieSheet(
+  BuildContext context,
+  L10n l10n, {
+  String initialText = '',
+  String? errorText,
+}) {
   return showFormSheet<String>(
     context: context,
     props: const SheetProps(detents: [0.5, 0.9]),
-    builder: (_) => _PasteCookieForm(l10n: l10n),
+    builder: (_) => _PasteCookieForm(
+      l10n: l10n,
+      initialText: initialText,
+      errorText: errorText,
+    ),
   );
 }
 
 class _PasteCookieForm extends StatefulWidget {
-  const _PasteCookieForm({required this.l10n});
+  const _PasteCookieForm({
+    required this.l10n,
+    this.initialText = '',
+    this.errorText,
+  });
 
   final L10n l10n;
+  final String initialText;
+  final String? errorText;
 
   @override
   State<_PasteCookieForm> createState() => _PasteCookieFormState();
 }
 
 class _PasteCookieFormState extends State<_PasteCookieForm> {
-  final TextEditingController _controller = TextEditingController();
-  String? _error;
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
+  late String? _error = widget.errorText;
 
   @override
   void dispose() {

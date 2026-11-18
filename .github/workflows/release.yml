@@ -95,6 +95,9 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Create Windows plugin links
+        run: dart run tool/windows_plugin_links.dart
+
       - name: Build Windows desktop
         run: flutter build windows --release
 
@@ -133,6 +136,15 @@ jobs:
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Validate tag matches pubspec
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pubspec version ${VERSION}" >&2
+            exit 1
+          fi
+
       - name: Select release notes
         id: notes
         env:
@@ -140,7 +152,8 @@ jobs:
         run: |
           NOTES=".github/release-notes-v${VERSION}.md"
           if [ ! -f "$NOTES" ]; then
-            NOTES=$(ls .github/release-notes-v*.md | sort -V | tail -n 1)
+            echo "Missing $NOTES" >&2
+            exit 1
           fi
           echo "path=$NOTES" >> "$GITHUB_OUTPUT"
 

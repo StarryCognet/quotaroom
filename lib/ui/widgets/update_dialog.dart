@@ -5,6 +5,7 @@ import 'package:prism_ui/icons/icons.dart';
 import 'package:prism_ui/prism_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/desktop_shell.dart';
 import '../../core/i18n.dart';
 import '../../core/platform.dart';
 import '../../data/apk_installer.dart';
@@ -27,7 +28,14 @@ Future<void> showUpdateDialog(
   );
 }
 
-enum _UpdatePhase { idle, downloading, permission, installing, done }
+enum _UpdatePhase {
+  idle,
+  downloading,
+  permission,
+  installing,
+  installFailed,
+  done,
+}
 
 class _UpdateDialog extends StatefulWidget {
   const _UpdateDialog({required this.state, required this.info});
@@ -52,12 +60,15 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   bool get _busy =>
       _phase == _UpdatePhase.downloading || _phase == _UpdatePhase.installing;
 
-  /// Android can install the APK in-app; desktop downloads the portable zip or
-  /// opens the release page in the browser.
+  /// Android installs the APK in-app; Windows downloads the verified Inno
+  /// Setup installer and runs it silently.
   bool get _canInstall => ApkInstaller.isSupported && widget.info.hasApk;
+
+  bool get _windowsInstaller => isWindows && widget.info.hasWindowsInstaller;
 
   int get _sizeBytes {
     if (_canInstall) return widget.info.apkSize;
+    if (_windowsInstaller) return widget.info.windowsSetupSize;
     if (isWindows && widget.info.hasWindowsPackage) {
       return widget.info.windowsSize;
     }
@@ -105,10 +116,31 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   }
 
   Future<void> _primaryAction() async {
+    if (_windowsInstaller) {
+      await _downloadAndInstallWindows();
+      return;
+    }
     if (!_canInstall) {
       final url = _downloadUrl;
-      if (url.isNotEmpty) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (url.isEmpty) {
+        setState(() => _error = widget.state.l10n.t('updateNotesEmpty'));
+        return;
+      }
+      try {
+        final opened = await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        );
+        if (!mounted) return;
+        if (!opened) {
+          setState(() => _error = widget.state.l10n.t('openFailed'));
+          return;
+        }
+        await widget.state.dismissUpdate(widget.info.latest);
+        if (mounted) Navigator.of(context).pop();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _error = e.toString());
       }
       return;
     }
@@ -147,6 +179,40 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     }
   }
 
+  Future<void> _downloadAndInstallWindows() async {
+    setState(() {
+      _phase = _UpdatePhase.downloading;
+      _progress = 0;
+      _received = 0;
+      _total = widget.info.windowsSetupSize;
+      _error = null;
+    });
+    try {
+      final file = await widget.state.updateService.downloadWindowsSetup(
+        widget.info,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          setState(() {
+            _received = received;
+            _total = total;
+            if (total > 0) _progress = received / total;
+          });
+        },
+      );
+      if (!mounted) return;
+      setState(() => _phase = _UpdatePhase.installing);
+      await UpdateService.runWindowsInstaller(file);
+      await widget.state.dismissUpdate(widget.info.latest);
+      if (mounted) await DesktopShell.instance.quit();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _UpdatePhase.installFailed;
+        _error = e.toString();
+      });
+    }
+  }
+
   Future<void> _launchInstaller() async {
     final file = _file;
     if (file == null) {
@@ -169,7 +235,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _phase = _UpdatePhase.permission;
+        _phase = _UpdatePhase.installFailed;
         _error = e.toString();
       });
     }
@@ -188,149 +254,160 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         : null;
     return PopScope(
       canPop: !_busy,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppCorner.xl),
-          child: Container(
-            decoration: ShapeDecoration(
-              color: scheme.surface,
-              shape: AppShape.all(AppCorner.xl),
-            ),
-            child: Stack(
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _Header(
-                      latest: info.latest,
-                      current: info.current,
-                      sizeLabel: sizeLabel,
-                      title: l10n.t('updateFound'),
-                      currentLabel: l10n.t('currentVersion'),
-                    ),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppCorner.xl),
+            child: Container(
+              decoration: ShapeDecoration(
+                color: scheme.surface,
+                shape: AppShape.all(AppCorner.xl),
+              ),
+              child: Stack(
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Header(
+                        latest: info.latest,
+                        current: info.current,
+                        sizeLabel: sizeLabel,
+                        title: l10n.t('updateFound'),
+                        currentLabel: l10n.t('currentVersion'),
                       ),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              l10n.t('updateAvailableBody'),
-                              style: AppTextStyle.footnote
-                                  .of(context)
-                                  .copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                    height: 1.5,
-                                  ),
-                            ),
-                            if (!_canInstall &&
-                                isWindows &&
-                                info.hasWindowsPackage) ...[
-                              const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                        ),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                l10n.t('updateWindowsHint'),
-                                style: AppTextStyle.caption2
+                                l10n.t('updateAvailableBody'),
+                                style: AppTextStyle.footnote
                                     .of(context)
                                     .copyWith(
                                       color: scheme.onSurfaceVariant,
                                       height: 1.5,
                                     ),
                               ),
-                            ],
-                            const SizedBox(height: 14),
-                            Text(
-                              l10n.t('releaseNotes'),
-                              style: AppTextStyle.caption1
-                                  .of(context, emphasized: true)
-                                  .copyWith(color: scheme.onSurface),
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 210),
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: ShapeDecoration(
-                                color: scheme.surfaceContainerHigh,
-                                shape: AppShape.all(AppCorner.md),
-                              ),
-                              child: SingleChildScrollView(
-                                child: Text(
-                                  notes,
+                              if (!_canInstall &&
+                                  isWindows &&
+                                  info.hasWindowsPackage) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  l10n.t(
+                                    info.hasWindowsInstaller
+                                        ? 'updateWindowsHint'
+                                        : 'updateWindowsManualHint',
+                                  ),
                                   style: AppTextStyle.caption2
                                       .of(context)
                                       .copyWith(
                                         color: scheme.onSurfaceVariant,
-                                        height: 1.65,
+                                        height: 1.5,
                                       ),
                                 ),
+                              ],
+                              const SizedBox(height: 14),
+                              Text(
+                                l10n.t('releaseNotes'),
+                                style: AppTextStyle.caption1
+                                    .of(context, emphasized: true)
+                                    .copyWith(color: scheme.onSurface),
                               ),
-                            ),
-                            if (_phase == _UpdatePhase.downloading) ...[
-                              const SizedBox(height: 16),
-                              LinearProgressIndicator(
-                                value: _total > 0 ? _progress : null,
-                                minHeight: 7,
-                              ),
-                              const SizedBox(height: 7),
-                              Row(
-                                children: [
-                                  Text(
-                                    l10n.t('updateDownloading', {
-                                      'pct': (_progress * 100).round(),
-                                    }),
+                              const SizedBox(height: 6),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 210,
+                                ),
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: ShapeDecoration(
+                                  color: scheme.surfaceContainerHigh,
+                                  shape: AppShape.all(AppCorner.md),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Text(
+                                    notes,
                                     style: AppTextStyle.caption2
                                         .of(context)
                                         .copyWith(
                                           color: scheme.onSurfaceVariant,
+                                          height: 1.65,
                                         ),
                                   ),
-                                  const Spacer(),
-                                  if (_total > 0)
+                                ),
+                              ),
+                              if (_phase == _UpdatePhase.downloading) ...[
+                                const SizedBox(height: 16),
+                                LinearProgressIndicator(
+                                  value: _total > 0 ? _progress : null,
+                                  minHeight: 7,
+                                ),
+                                const SizedBox(height: 7),
+                                Row(
+                                  children: [
                                     Text(
-                                      '${_mb(_received)} / ${_mb(_total)}',
+                                      l10n.t('updateDownloading', {
+                                        'pct': (_progress * 100).round(),
+                                      }),
                                       style: AppTextStyle.caption2
                                           .of(context)
                                           .copyWith(
                                             color: scheme.onSurfaceVariant,
                                           ),
                                     ),
-                                ],
-                              ),
+                                    const Spacer(),
+                                    if (_total > 0)
+                                      Text(
+                                        '${_mb(_received)} / ${_mb(_total)}',
+                                        style: AppTextStyle.caption2
+                                            .of(context)
+                                            .copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                              if (_phase == _UpdatePhase.permission) ...[
+                                const SizedBox(height: 14),
+                                _PermissionNotice(
+                                  title: l10n.t('updatePermissionTitle'),
+                                  body: l10n.t('updatePermissionBody'),
+                                  scheme: scheme,
+                                ),
+                              ],
+                              if (_error != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  '${l10n.t(_phase == _UpdatePhase.installFailed ? 'updateInstallFailed' : 'updateDownloadFailed')}: $_error',
+                                  style: AppTextStyle.caption2
+                                      .of(context)
+                                      .copyWith(
+                                        color: scheme.error,
+                                        height: 1.4,
+                                      ),
+                                ),
+                              ],
                             ],
-                            if (_phase == _UpdatePhase.permission) ...[
-                              const SizedBox(height: 14),
-                              _PermissionNotice(
-                                title: l10n.t('updatePermissionTitle'),
-                                body: l10n.t('updatePermissionBody'),
-                                scheme: scheme,
-                              ),
-                            ],
-                            if (_error != null) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                '${l10n.t('updateDownloadFailed')}: $_error',
-                                style: AppTextStyle.caption2
-                                    .of(context)
-                                    .copyWith(color: scheme.error, height: 1.4),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
-                      child: _actions(context, l10n),
-                    ),
-                  ],
-                ),
-                if (_showConfetti)
-                  const Positioned.fill(child: ConfettiBurst()),
-              ],
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                        child: _actions(context, l10n),
+                      ),
+                    ],
+                  ),
+                  if (_showConfetti)
+                    const Positioned.fill(child: ConfettiBurst()),
+                ],
+              ),
             ),
           ),
         ),
@@ -360,19 +437,28 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         ],
       );
     }
-    if (_phase == _UpdatePhase.permission) {
-      return Row(
+    if (_phase == _UpdatePhase.permission ||
+        _phase == _UpdatePhase.installFailed) {
+      return OverflowBar(
+        alignment: MainAxisAlignment.end,
+        spacing: 4,
         children: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(l10n.t('updateLater')),
           ),
-          const Spacer(),
-          TextButton(
-            onPressed: ApkInstaller.openInstallPermissionSettings,
-            child: Text(l10n.t('openInstallSettings')),
-          ),
-          const SizedBox(width: 4),
+          if (_phase == _UpdatePhase.permission)
+            TextButton(
+              onPressed: () async {
+                try {
+                  await ApkInstaller.openInstallPermissionSettings();
+                } catch (e) {
+                  if (!mounted) return;
+                  setState(() => _error = e.toString());
+                }
+              },
+              child: Text(l10n.t('openInstallSettings')),
+            ),
           FilledButton(
             onPressed: _launchInstaller,
             child: Text(l10n.t('retryInstall')),
@@ -391,17 +477,24 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         ],
       );
     }
-    return Row(
+    return OverflowBar(
+      alignment: MainAxisAlignment.spaceBetween,
+      spacing: 8,
       children: [
         TextButton(onPressed: _later, child: Text(l10n.t('updateLater'))),
-        const Spacer(),
         FilledButton.icon(
           onPressed: _primaryAction,
           icon: GlyphIcon(
-            _canInstall ? AppGlyphs.cloudDownload : AppGlyphs.openExternal,
+            _canInstall || _windowsInstaller
+                ? AppGlyphs.cloudDownload
+                : AppGlyphs.openExternal,
             size: 17,
           ),
-          label: Text(_canInstall ? l10n.t('updateNow') : l10n.t('goDownload')),
+          label: Text(
+            _canInstall || _windowsInstaller
+                ? l10n.t('updateNow')
+                : l10n.t('goDownload'),
+          ),
         ),
       ],
     );

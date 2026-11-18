@@ -98,7 +98,9 @@ class AppRoot extends StatelessWidget {
       key = 'shell';
     }
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 420),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) => FadeTransition(

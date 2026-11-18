@@ -60,7 +60,7 @@ QuotaRoom is built with Flutter and Dart and uses packages including
 `flutter_secure_storage`, `flutter_local_notifications`, `webview_flutter`,
 `file_selector`, `share_plus`, `url_launcher`, `package_info_plus`,
 `path_provider`, `shared_preferences`, `flutter_svg`, `intl`, `workmanager`,
-`home_widget` and `quick_actions`.
+`home_widget`, `quick_actions`, `window_manager` / `nativeapi`, `tray_manager` and `crypto`.
 
 Each dependency remains under its own license (MIT, BSD-3-Clause, Apache-2.0
 or the license stated on its pub.dev page). Their copyright notices and

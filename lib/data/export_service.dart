@@ -15,9 +15,21 @@ class ExportService {
 
   Future<File> exportRecordsCsv(
     int accountId,
-    Map<String, String> keyNames,
-  ) async {
-    final records = await usage.allRecords(accountId);
+    Map<String, String> keyNames, {
+    String? model,
+    int? days,
+    String? keyId,
+    String? sessionId,
+    String? query,
+  }) async {
+    final records = await usage.allRecords(
+      accountId,
+      model: model,
+      days: days,
+      keyId: keyId,
+      sessionId: sessionId,
+      query: query,
+    );
     final buffer = StringBuffer();
     buffer.writeln(
       'created_at,model,provider,key_id,key_name,session_id,'
@@ -101,7 +113,14 @@ class ExportService {
       await file.delete();
     }
     final escaped = file.path.replaceAll("'", "''");
-    await db.execute("VACUUM INTO '$escaped'");
+    try {
+      await db.execute("VACUUM INTO '$escaped'");
+    } catch (_) {
+      // Android 7–9 ship SQLite older than 3.27 (no VACUUM INTO). Flush the
+      // WAL and copy the database file as a best-effort fallback.
+      await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+      await File(db.path).copy(file.path);
+    }
     return file;
   }
 
@@ -176,6 +195,8 @@ class ExportService {
       if (!names.containsAll(required)) {
         throw Exception('Unsupported backup schema');
       }
+      // Backups produced before these columns existed must still restore.
+      String optional(String name) => names.contains(name) ? name : 'NULL';
       final before =
           Sqflite.firstIntValue(
             await db.rawQuery(
@@ -190,11 +211,12 @@ class ExportService {
           (usg_id, account_id, created_at, created_ms, model, provider,
            input_tokens, output_tokens, reasoning_tokens, cache_read_tokens,
            cache_write_5m_tokens, cache_write_1h_tokens, cost_raw, cost_usd,
-           key_id, session_id, plan, synced_at)
-        SELECT usg_id, ?, created_at, created_ms, model, provider,
+           key_id, session_id, plan, origin, synced_at)
+        SELECT usg_id, ?, created_at, created_ms, model, ${optional('provider')},
            input_tokens, output_tokens, reasoning_tokens, cache_read_tokens,
            cache_write_5m_tokens, cache_write_1h_tokens, cost_raw, cost_usd,
-           key_id, session_id, plan, synced_at
+           ${optional('key_id')}, ${optional('session_id')},
+           ${optional('plan')}, 'restore', synced_at
         FROM qr_restore.usage_records
       ''',
         [accountId],
@@ -215,7 +237,12 @@ class ExportService {
   }
 
   static String _csv(String value) {
-    return '"${value.replaceAll('"', '""')}"';
+    var safe = value;
+    if (safe.isNotEmpty && '=+-@\t\r'.contains(safe[0])) {
+      // Prevent spreadsheet formula execution from server-provided values.
+      safe = "'$safe";
+    }
+    return '"${safe.replaceAll('"', '""')}"';
   }
 
   static String _stamp() {
