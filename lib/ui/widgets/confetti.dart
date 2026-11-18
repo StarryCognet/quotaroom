@@ -39,7 +39,7 @@ class _ConfettiBurstState extends State<ConfettiBurst>
           builder: (context, _) {
             return CustomPaint(
               painter: _ConfettiPainter(
-                progress: Curves.easeOut.transform(_controller.value),
+                progress: _controller.value,
                 count: widget.count,
                 colors: [
                   Theme.of(context).colorScheme.primary,
@@ -77,16 +77,16 @@ class _ConfettiPainter extends CustomPainter {
     final fade = progress < 0.80 ? 1.0 : (1 - progress) / 0.20;
     // Start just below the dialog header and spray downward/outward so the
     // pieces stay visible inside the dialog instead of disappearing above it.
-    final origin = Offset(size.width / 2, size.height * 0.20);
-    final time = progress * 2.9;
+    final origin = Offset(size.width / 2, size.height * 0.18);
+    final time = progress * 2.4;
     final paint = Paint();
     for (var i = 0; i < count; i++) {
       final angle = pi * (0.10 + random.nextDouble() * 0.80);
-      final speed = size.height * (0.18 + random.nextDouble() * 0.55);
-      final vx = cos(angle) * speed * 0.9;
+      final speed = size.height * (0.10 + random.nextDouble() * 0.35);
+      final vx = cos(angle) * speed * 1.35;
       final vy = sin(angle) * speed;
       final x = origin.dx + vx * time;
-      final y = origin.dy + vy * time + 0.5 * size.height * 0.55 * time * time;
+      final y = origin.dy + vy * time + 0.5 * size.height * 0.35 * time * time;
       if (x < -20 || x > size.width + 20 || y > size.height + 20) continue;
       final particleWidth = 3.5 + random.nextDouble() * 4.5;
       final particleHeight = 2.5 + random.nextDouble() * 5.5;
