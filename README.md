@@ -32,7 +32,7 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
 - v2.0.0 直链：[QuotaRoom-v2.0.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.0.0/QuotaRoom-v2.0.0.apk)
-- SHA-256：见 Release 附件 `SHA256SUMS.txt`
+- SHA-256：`c1fe65f3be6c5a150a618a7b0c3fc29a5f0eebd3dc974b88a4cc89b92b4867c9`
 
 > 当前 APK 使用 debug 签名，适合个人安装；上架或长期分发请配置 release keystore。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
