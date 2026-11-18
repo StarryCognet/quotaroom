@@ -32,11 +32,10 @@ class SettingsRepository {
   }
 
   Future<void> writePayload(Map<String, Object?> payload) async {
-    await db.update(
-      'settings',
-      {'payload': jsonEncode(payload), 'updated_at': nowIso()},
-      where: 'id = 1',
-    );
+    await db.update('settings', {
+      'payload': jsonEncode(payload),
+      'updated_at': nowIso(),
+    }, where: 'id = 1');
   }
 
   Future<Settings> getSettings() async {

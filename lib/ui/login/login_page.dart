@@ -24,9 +24,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _busy = false;
 
   Future<void> _openWebLogin() async {
-    final token = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const LoginWebViewPage()),
-    );
+    final token = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const LoginWebViewPage()));
     if (token == null || !mounted) return;
     await _finishLogin(token);
   }
@@ -51,9 +51,9 @@ class _LoginPageState extends State<LoginPage> {
       if (widget.asRoute) {
         Navigator.of(context).pop();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(state.l10n.t('loginSuccess'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(state.l10n.t('loginSuccess'))));
       }
     } catch (e) {
       if (!mounted) return;
@@ -253,11 +253,7 @@ class _FeatureRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.5,
-              color: colors.text2,
-            ),
+            style: TextStyle(fontSize: 13, height: 1.5, color: colors.text2),
           ),
         ),
       ],

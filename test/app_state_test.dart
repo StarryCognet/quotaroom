@@ -7,10 +7,9 @@ void main() {
     final now = DateTime.now();
     final today =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final filled = AppState.fillDays(
-      [DailyStat(date: today, requestCount: 3)],
-      7,
-    );
+    final filled = AppState.fillDays([
+      DailyStat(date: today, requestCount: 3),
+    ], 7);
     expect(filled, hasLength(7));
     expect(filled.last.date, today);
     expect(filled.last.requestCount, 3);

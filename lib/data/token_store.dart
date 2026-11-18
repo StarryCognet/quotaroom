@@ -42,8 +42,7 @@ class SecureTokenStore implements TokenStore {
 }
 
 class MemoryTokenStore implements TokenStore {
-  MemoryTokenStore([Map<int, String>? initial])
-    : _tokens = {...?initial};
+  MemoryTokenStore([Map<int, String>? initial]) : _tokens = {...?initial};
 
   final Map<int, String> _tokens;
 

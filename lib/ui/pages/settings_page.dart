@@ -2,18 +2,17 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/export_service.dart';
 import '../../data/models.dart';
-import '../../data/update_service.dart';
 import '../../state/app_state.dart';
 import '../login/login_page.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/update_dialog.dart';
 import 'about_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -923,56 +922,14 @@ class _UpdateRowState extends State<_UpdateRow> {
     final l10n = widget.l10n;
     setState(() => _busy = true);
     try {
-      final info = await UpdateService().check();
+      final info = await widget.state.checkForUpdate(force: true);
       if (!mounted) return;
-      if (!info.hasUpdate) {
+      if (info == null || !info.hasUpdate) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(l10n.t('updateNone'))));
         return;
       }
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(l10n.t('updateFound')),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${l10n.t('currentVersion')}: ${info.current}'),
-                Text('${l10n.t('updateLatest')}: ${info.latest}'),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.t('releaseNotes'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  info.notes.isEmpty ? l10n.t('noReleaseNotes') : info.notes,
-                  style: const TextStyle(fontSize: 11.5, height: 1.6),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.t('close')),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                if (info.releaseUrl.isNotEmpty) {
-                  launchUrl(
-                    Uri.parse(info.releaseUrl),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              },
-              child: Text(l10n.t('goDownload')),
-            ),
-          ],
-        ),
-      );
+      await showUpdateDialog(context, state: widget.state, info: info);
     } catch (e) {
       if (!mounted) return;
       final message = e.toString().contains('403')

@@ -65,11 +65,7 @@ class SyncService {
     }
     final currentSettings = await settings.getSettings();
     _emit(
-      const SyncProgress(
-        running: true,
-        mode: 'incremental',
-        phase: 'usage',
-      ),
+      const SyncProgress(running: true, mode: 'incremental', phase: 'usage'),
     );
     var totalInserted = 0;
     var totalPages = 0;
@@ -106,11 +102,7 @@ class SyncService {
           inserted: totalInserted,
         ),
       );
-      return SyncResult(
-        ok: true,
-        inserted: totalInserted,
-        pages: totalPages,
-      );
+      return SyncResult(ok: true, inserted: totalInserted, pages: totalPages);
     } catch (e) {
       _emit(
         _state.copyWith(running: false, phase: 'error', message: e.toString()),
@@ -137,11 +129,7 @@ class SyncService {
       ),
     );
     try {
-      final result = await _syncOne(
-        active,
-        'full',
-        currentSettings.windowDays,
-      );
+      final result = await _syncOne(active, 'full', currentSettings.windowDays);
       _emit(
         _state.copyWith(
           running: false,
@@ -320,11 +308,7 @@ class SyncService {
       status: 'ok',
       inserted: totalInserted,
     );
-    return SyncResult(
-      ok: true,
-      inserted: totalInserted,
-      pages: totalPages,
-    );
+    return SyncResult(ok: true, inserted: totalInserted, pages: totalPages);
   }
 
   /// Last known quota (possibly stale) for instant UI rendering.
@@ -332,10 +316,7 @@ class SyncService {
 
   /// Quota is cached per account for 30 seconds, failures included, matching
   /// the desktop server's retry-storm protection.
-  Future<QuotaResult> quotaFor(
-    Account account, {
-    bool force = false,
-  }) async {
+  Future<QuotaResult> quotaFor(Account account, {bool force = false}) async {
     final cached = _quotaCache[account.id];
     final now = DateTime.now();
     if (!force &&

@@ -4,10 +4,7 @@ import '../../core/i18n.dart';
 
 /// Manual token/cookie fallback for environments where the embedded login
 /// cannot complete (or for quick testing).
-Future<String?> showPasteCookieSheet(
-  BuildContext context,
-  L10n l10n,
-) {
+Future<String?> showPasteCookieSheet(BuildContext context, L10n l10n) {
   final controller = TextEditingController();
   return showModalBottomSheet<String>(
     context: context,
@@ -50,9 +47,7 @@ Future<String?> showPasteCookieSheet(
               autocorrect: false,
               enableSuggestions: false,
               style: const TextStyle(fontSize: 12.5, height: 1.45),
-              decoration: InputDecoration(
-                hintText: l10n.t('pasteCookieHint'),
-              ),
+              decoration: InputDecoration(hintText: l10n.t('pasteCookieHint')),
             ),
             const SizedBox(height: 14),
             Row(

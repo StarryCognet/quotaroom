@@ -26,10 +26,7 @@ const Map<String, Object?> _goStatus = {
         'limitMicroCents': '3000000000',
         'usedMicroCents': '7632295',
       },
-      'month': {
-        'limitMicroCents': '6000000000',
-        'usedMicroCents': '7632295',
-      },
+      'month': {'limitMicroCents': '6000000000', 'usedMicroCents': '7632295'},
     },
   },
 };
@@ -103,7 +100,9 @@ void main() {
         'auth=Fe26.2',
       );
       expect(
-        OpenCodeApi.buildCookieHeader('Cookie: a=1; __Host-console_session=st_x'),
+        OpenCodeApi.buildCookieHeader(
+          'Cookie: a=1; __Host-console_session=st_x',
+        ),
         '__Host-console_session=st_x',
       );
     });
@@ -132,10 +131,7 @@ void main() {
       expect(windows[1].used, 0.25);
       expect(windows[2].label, 'Monthly');
       expect(windows[2].used, 0.13);
-      expect(
-        windows[2].resetAt?.toIso8601String(),
-        '2026-10-26T12:06:25.000Z',
-      );
+      expect(windows[2].resetAt?.toIso8601String(), '2026-10-26T12:06:25.000Z');
       expect(windows[2].resetInSec, 2589000);
     });
 

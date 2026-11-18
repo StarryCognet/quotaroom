@@ -25,61 +25,58 @@ class AccountsPage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
         children: [
-        Row(
-          children: [
-            Expanded(
-              child: SectionHeader(
-                title: l10n.t('accountsTab'),
-                subtitle: l10n.t('accountsCount', {'n': state.accounts.length}),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: () => _openLogin(context),
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
-              label: Text(
-                l10n.t('addAccount'),
-                style: const TextStyle(fontSize: 12),
-              ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+          Row(
+            children: [
+              Expanded(
+                child: SectionHeader(
+                  title: l10n.t('accountsTab'),
+                  subtitle: l10n.t('accountsCount', {
+                    'n': state.accounts.length,
+                  }),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: () => _openLogin(context),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
+                label: Text(
+                  l10n.t('addAccount'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (var i = 0; i < state.accounts.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            _AccountCard(account: state.accounts[i], index: i, state: state),
           ],
-        ),
-        const SizedBox(height: 14),
-        for (var i = 0; i < state.accounts.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
-          _AccountCard(
-            account: state.accounts[i],
-            index: i,
-            state: state,
+          if (state.settings.showAccountsPanel &&
+              state.overviews.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _OverviewSummary(state: state),
+          ],
+          const SizedBox(height: 14),
+          Text(
+            l10n.t('addUserTip'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, color: colors.text3, height: 1.5),
           ),
         ],
-        if (state.settings.showAccountsPanel && state.overviews.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          _OverviewSummary(state: state),
-        ],
-        const SizedBox(height: 14),
-        Text(
-          l10n.t('addUserTip'),
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 11, color: colors.text3, height: 1.5),
-        ),
-      ],
       ),
     );
   }
 
   Future<void> _openLogin(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const LoginPage(asRoute: true),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginPage(asRoute: true)));
   }
 }
 
@@ -369,17 +366,11 @@ class _AccountCard extends StatelessWidget {
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'rename',
-                    child: _menuRow(
-                      Icons.edit_outlined,
-                      l10n.t('renameBtn'),
-                    ),
+                    child: _menuRow(Icons.edit_outlined, l10n.t('renameBtn')),
                   ),
                   PopupMenuItem(
                     value: 'relogin',
-                    child: _menuRow(
-                      Icons.login_rounded,
-                      l10n.t('relogin'),
-                    ),
+                    child: _menuRow(Icons.login_rounded, l10n.t('relogin')),
                   ),
                   if (account.hasToken)
                     PopupMenuItem(
@@ -408,9 +399,7 @@ class _AccountCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var i = 0;
-                      i < overview.quota!.windows.length;
-                      i++) ...[
+                  for (var i = 0; i < overview.quota!.windows.length; i++) ...[
                     if (i > 0) const SizedBox(width: 10),
                     Expanded(
                       child: _MiniQuota(
@@ -527,9 +516,8 @@ class _AccountCard extends StatelessWidget {
     final l10n = state.l10n;
     await state.switchAccount(account.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.t('switchedAccount'))),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.t('switchedAccount'))));
   }
 
   Future<void> _relogin(BuildContext context) async {
@@ -562,9 +550,8 @@ class _AccountCard extends StatelessWidget {
         if (!confirmed || !context.mounted) return;
         await state.logoutAccount(account.id);
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('loggedOut'))),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('loggedOut'))));
         break;
       case 'delete':
         final confirmed = await _confirm(
@@ -577,9 +564,8 @@ class _AccountCard extends StatelessWidget {
         if (!confirmed || !context.mounted) return;
         await state.deleteAccount(account.id);
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('userDeleted'))),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('userDeleted'))));
         break;
     }
   }
@@ -607,8 +593,7 @@ class _AccountCard extends StatelessWidget {
             child: Text(l10n.t('cancel')),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text),
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
             child: Text(l10n.t('save')),
           ),
         ],
@@ -617,9 +602,8 @@ class _AccountCard extends StatelessWidget {
     if (name == null || name.trim().isEmpty) return;
     await state.renameAccount(account.id, name.trim());
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.t('userRenamed'))),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(l10n.t('userRenamed'))));
   }
 
   Future<bool> _confirm(
@@ -687,10 +671,7 @@ class _Badge extends StatelessWidget {
 }
 
 class _MiniQuota extends StatelessWidget {
-  const _MiniQuota({
-    required this.window,
-    required this.l10n,
-  });
+  const _MiniQuota({required this.window, required this.l10n});
 
   final QuotaWindow window;
   final L10n l10n;

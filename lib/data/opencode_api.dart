@@ -25,8 +25,10 @@ class AuthException extends OpenCodeApiException {
 ///
 /// Ported from the desktop app's `app/opencode_api.py`.
 class OpenCodeApi {
-  OpenCodeApi({http.Client? client, this.requestTimeout = const Duration(seconds: 30)})
-    : _client = client ?? http.Client();
+  OpenCodeApi({
+    http.Client? client,
+    this.requestTimeout = const Duration(seconds: 30),
+  }) : _client = client ?? http.Client();
 
   static const String consoleOrigin = 'https://opencode.ai';
   static const String loginUrl =
@@ -63,8 +65,7 @@ class OpenCodeApi {
       final eq = p.indexOf('=');
       if (eq <= 0) continue;
       final name = p.substring(0, eq).trim().toLowerCase();
-      if (name == sessionCookie.toLowerCase() ||
-          name == legacySessionCookie) {
+      if (name == sessionCookie.toLowerCase() || name == legacySessionCookie) {
         return p;
       }
     }
@@ -163,13 +164,18 @@ class OpenCodeApi {
     Object? lastError;
     for (var attempt = 0; attempt < retries; attempt++) {
       try {
-        final response = await _client.get(uri, headers: headers).timeout(timeout);
+        final response = await _client
+            .get(uri, headers: headers)
+            .timeout(timeout);
         final code = response.statusCode;
         if (code == 401) {
           throw const AuthException();
         }
         if (code == 403) {
-          throw const OpenCodeApiException('无访问权限 (HTTP 403)', retryable: false);
+          throw const OpenCodeApiException(
+            '无访问权限 (HTTP 403)',
+            retryable: false,
+          );
         }
         if (code == 404) {
           throw const OpenCodeApiException(
@@ -194,9 +200,10 @@ class OpenCodeApi {
         lastError = OpenCodeApiException('TLS 错误: ${e.message}');
       }
       if (attempt < retries - 1) {
-        final delay = _retryBackoffMs[
-          attempt < _retryBackoffMs.length ? attempt : _retryBackoffMs.length - 1
-        ];
+        final delay =
+            _retryBackoffMs[attempt < _retryBackoffMs.length
+                ? attempt
+                : _retryBackoffMs.length - 1];
         await Future<void>.delayed(Duration(milliseconds: delay));
       }
     }
@@ -219,7 +226,9 @@ class OpenCodeApi {
         if (item is! Map) continue;
         final id = (item['id'] ?? '').toString().trim();
         if (id.isEmpty || !seen.add(id)) continue;
-        refs.add(WorkspaceRef(id: id, name: (item['name'] ?? '').toString().trim()));
+        refs.add(
+          WorkspaceRef(id: id, name: (item['name'] ?? '').toString().trim()),
+        );
       }
     }
     if (refs.isEmpty) {
@@ -239,8 +248,7 @@ class OpenCodeApi {
     final lower = trimmed.toLowerCase();
     if (lower.isNotEmpty) {
       for (final ref in refs) {
-        if (ref.id.toLowerCase() == lower ||
-            ref.name.toLowerCase() == lower) {
+        if (ref.id.toLowerCase() == lower || ref.name.toLowerCase() == lower) {
           return ref;
         }
       }
@@ -269,7 +277,9 @@ class OpenCodeApi {
   }) async {
     final now = DateTime.now().toUtc();
     final updatedAt = now;
-    final hint = workspaceHint.trim().isEmpty ? 'Default' : workspaceHint.trim();
+    final hint = workspaceHint.trim().isEmpty
+        ? 'Default'
+        : workspaceHint.trim();
     if (token.trim().isEmpty) {
       return QuotaResult(
         name: 'Default',
@@ -385,7 +395,8 @@ class OpenCodeApi {
       for (final item in items) {
         if (item is! Map) continue;
         final mapped = item.cast<String, Object?>();
-        if ((mapped['category'] ?? '').toString().toLowerCase() != 'inference') {
+        if ((mapped['category'] ?? '').toString().toLowerCase() !=
+            'inference') {
           continue;
         }
         final usgId = (mapped['id'] ?? '').toString().trim();
@@ -479,10 +490,13 @@ class OpenCodeApi {
   Future<double> fetchUsdCny() async {
     final uri = Uri.parse('https://open.er-api.com/v6/latest/USD');
     final response = await _client
-        .get(uri, headers: const {
-          'User-Agent': 'QuotaRoom/2.0',
-          'Accept': 'application/json',
-        })
+        .get(
+          uri,
+          headers: const {
+            'User-Agent': 'QuotaRoom/2.0',
+            'Accept': 'application/json',
+          },
+        )
         .timeout(const Duration(seconds: 10));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw OpenCodeApiException('汇率接口 HTTP ${response.statusCode}');
@@ -523,8 +537,7 @@ DateTime? _parseIsoUtc(Object? value) {
   if (text.isEmpty) return null;
   try {
     final hasZone =
-        text.endsWith('Z') ||
-        RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(text);
+        text.endsWith('Z') || RegExp(r'[+-]\d{2}:?\d{2}$').hasMatch(text);
     final parsed = DateTime.parse(text);
     if (hasZone) return parsed.toUtc();
     return DateTime.utc(

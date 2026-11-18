@@ -31,6 +31,17 @@ jobs:
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Select release notes
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          NOTES=".github/release-notes-v${VERSION}.md"
+          if [ ! -f "$NOTES" ]; then
+            NOTES=".github/release-notes-v2.0.0.md"
+          fi
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
       - name: Dependencies
         run: flutter pub get
 
@@ -75,4 +86,4 @@ jobs:
           files: |
             dist/*.apk
             dist/SHA256SUMS.txt
-          body_path: .github/release-notes-v2.0.0.md
+          body_path: ${{ steps.notes.outputs.path }}

@@ -183,9 +183,7 @@ class _QuotaRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    l10n.t('paceShort', {
-                      'n': pacing.pace.toStringAsFixed(1),
-                    }),
+                    l10n.t('paceShort', {'n': pacing.pace.toStringAsFixed(1)}),
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,

@@ -23,10 +23,7 @@ class AccountRepository {
       final id = (row['id'] as num?)?.toInt() ?? 0;
       final token = await tokens.read(id);
       result.add(
-        Account.fromDbMap(
-          row,
-          hasToken: (token ?? '').trim().isNotEmpty,
-        ),
+        Account.fromDbMap(row, hasToken: (token ?? '').trim().isNotEmpty),
       );
     }
     return result;
@@ -130,7 +127,8 @@ class AccountRepository {
       if (setActive) await this.setActive(only.id);
       return (await getAccount(only.id))!;
     }
-    final count = Sqflite.firstIntValue(
+    final count =
+        Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM accounts'),
         ) ??
         0;

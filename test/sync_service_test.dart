@@ -99,41 +99,41 @@ void main() {
     expect(rows, hasLength(1));
   });
 
-  test('incremental starts from newest minus one hour and stops on empty pages', () async {
-    final now = DateTime.now().toUtc();
-    final old = now.subtract(const Duration(hours: 2));
-    await usage.insertUsageRecords([_rec('old', old)], 1);
-    await usage.updateSyncState(1, status: 'ok');
+  test(
+    'incremental starts from newest minus one hour and stops on empty pages',
+    () async {
+      final now = DateTime.now().toUtc();
+      final old = now.subtract(const Duration(hours: 2));
+      await usage.insertUsageRecords([_rec('old', old)], 1);
+      await usage.updateSyncState(1, status: 'ok');
 
-    final api = _FakeApi({
-      'first': UsagePage(
-        records: [_rec('new1', now)],
-        nextCursor: 'c1',
-      ),
-      'c1': const UsagePage(nextCursor: 'c2'),
-      'c2': const UsagePage(nextCursor: 'c3'),
-    });
-    final service = SyncService(
-      accounts: accounts,
-      usage: usage,
-      settings: settings,
-      api: api,
-    );
-    final result = await service.syncIncremental();
+      final api = _FakeApi({
+        'first': UsagePage(records: [_rec('new1', now)], nextCursor: 'c1'),
+        'c1': const UsagePage(nextCursor: 'c2'),
+        'c2': const UsagePage(nextCursor: 'c3'),
+      });
+      final service = SyncService(
+        accounts: accounts,
+        usage: usage,
+        settings: settings,
+        api: api,
+      );
+      final result = await service.syncIncremental();
 
-    expect(result.ok, isTrue);
-    expect(result.inserted, 1);
-    expect(api.calls, 3);
-    expect(api.sinceValues.first, isNotNull);
-    // newest (old) - 1h overlap
-    expect(
-      api.sinceValues.first,
-      old.millisecondsSinceEpoch - SyncService.incrementalOverlapMs,
-    );
-    final state = await usage.syncState(1);
-    expect(state.lastSyncStatus, 'ok');
-    expect(state.totalRecords, 2);
-  });
+      expect(result.ok, isTrue);
+      expect(result.inserted, 1);
+      expect(api.calls, 3);
+      expect(api.sinceValues.first, isNotNull);
+      // newest (old) - 1h overlap
+      expect(
+        api.sinceValues.first,
+        old.millisecondsSinceEpoch - SyncService.incrementalOverlapMs,
+      );
+      final state = await usage.syncState(1);
+      expect(state.lastSyncStatus, 'ok');
+      expect(state.totalRecords, 2);
+    },
+  );
 
   test('full sync stops at the window boundary and prunes', () async {
     await settings.saveSettings(const Settings(windowDays: 30));

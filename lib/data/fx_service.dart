@@ -15,9 +15,7 @@ class FxService {
     final cached = await settings.getFxCache();
     final rate = cached.rate > 0 ? cached.rate : fallbackRate;
     final at = cached.at;
-    if (!force &&
-        at != null &&
-        DateTime.now().difference(at) < ttl) {
+    if (!force && at != null && DateTime.now().difference(at) < ttl) {
       return rate;
     }
     try {

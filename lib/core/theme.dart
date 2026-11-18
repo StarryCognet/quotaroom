@@ -212,9 +212,8 @@ extension AppColorsContext on BuildContext {
       Theme.of(this).extension<AppColors>() ?? AppColors.light;
 
   /// Monospace-ish tabular figures for all numeric cells.
-  TextStyle get numStyle => const TextStyle(
-    fontFeatures: [FontFeature.tabularFigures()],
-  );
+  TextStyle get numStyle =>
+      const TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 }
 
 const List<BoxShadow> cardShadowLight = [
@@ -234,19 +233,20 @@ ThemeData buildAppTheme(Brightness brightness, {bool amoled = false}) {
   final c = brightness == Brightness.dark
       ? (amoled ? AppColors.amoled : AppColors.dark)
       : AppColors.light;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: c.primary,
-    brightness: brightness,
-  ).copyWith(
-    primary: c.primary,
-    onPrimary: Colors.white,
-    secondary: c.blue,
-    surface: c.card,
-    onSurface: c.text,
-    error: c.red,
-    outline: c.border,
-    surfaceContainerHighest: c.muted,
-  );
+  final scheme =
+      ColorScheme.fromSeed(
+        seedColor: c.primary,
+        brightness: brightness,
+      ).copyWith(
+        primary: c.primary,
+        onPrimary: Colors.white,
+        secondary: c.blue,
+        surface: c.card,
+        onSurface: c.text,
+        error: c.red,
+        outline: c.border,
+        surfaceContainerHighest: c.muted,
+      );
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -339,9 +339,8 @@ ThemeData buildAppTheme(Brightness brightness, {bool amoled = false}) {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? Colors.white
-            : c.text3,
+        (states) =>
+            states.contains(WidgetState.selected) ? Colors.white : c.text3,
       ),
       trackColor: WidgetStateProperty.resolveWith(
         (states) =>

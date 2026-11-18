@@ -12,8 +12,7 @@ import '../widgets/common.dart';
 class OpenSourceLicensesPage extends StatelessWidget {
   const OpenSourceLicensesPage({super.key});
 
-  static const _upstreamUrl =
-      'https://github.com/yphyphyph/opencode-go-gauge';
+  static const _upstreamUrl = 'https://github.com/yphyphyph/opencode-go-gauge';
 
   @override
   Widget build(BuildContext context) {
@@ -60,10 +59,7 @@ class OpenSourceLicensesPage extends StatelessWidget {
                         ),
                         child: Text(
                           tech,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: colors.text2,
-                          ),
+                          style: TextStyle(fontSize: 10.5, color: colors.text2),
                         ),
                       ),
                   ],
@@ -106,11 +102,7 @@ class OpenSourceLicensesPage extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.code_rounded,
-                      size: 18,
-                      color: colors.primary,
-                    ),
+                    Icon(Icons.code_rounded, size: 18, color: colors.primary),
                     const SizedBox(width: 11),
                     Expanded(
                       child: Column(
@@ -158,15 +150,13 @@ class OpenSourceLicensesPage extends StatelessWidget {
         mode: LaunchMode.externalApplication,
       );
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.t('loadFailed'))),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(l10n.t('loadFailed'))));
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.t('loadFailed')}: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${l10n.t('loadFailed')}: $e')));
     }
   }
 }

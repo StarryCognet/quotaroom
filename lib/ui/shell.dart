@@ -13,6 +13,7 @@ import 'pages/records_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/stats_page.dart';
 import 'widgets/app_logo.dart';
+import 'widgets/update_dialog.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -33,6 +34,28 @@ class _AppShellState extends State<AppShell> {
     AccountsPage(),
     SettingsPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_autoCheckUpdate());
+    });
+  }
+
+  Future<void> _autoCheckUpdate() async {
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    if (!state.hasLoggedInAccount) return;
+    try {
+      final info = await state.checkForUpdate();
+      if (!mounted || info == null || !info.hasUpdate) return;
+      if (state.isUpdateDismissed(info.latest)) return;
+      await showUpdateDialog(context, state: state, info: info);
+    } catch (_) {
+      // Silent on startup; the settings page exposes manual retry.
+    }
+  }
 
   @override
   void didChangeDependencies() {

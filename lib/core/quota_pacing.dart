@@ -44,8 +44,9 @@ QuotaPacing? computeQuotaPacing(QuotaWindow window, {DateTime? now}) {
   if (resetSeconds <= 0) return null;
   final elapsedSeconds = durationSeconds - resetSeconds;
   if (elapsedSeconds <= 0) return null;
-  final elapsedFraction =
-      (elapsedSeconds / durationSeconds).clamp(0.02, 1.0).toDouble();
+  final elapsedFraction = (elapsedSeconds / durationSeconds)
+      .clamp(0.02, 1.0)
+      .toDouble();
   final usedFraction = (window.used / 100).clamp(0.0, 1.0).toDouble();
   if (usedFraction <= 0) {
     return QuotaPacing(
@@ -64,7 +65,6 @@ QuotaPacing? computeQuotaPacing(QuotaWindow window, {DateTime? now}) {
     elapsedFraction: elapsedFraction,
     pace: pace,
     etaSeconds: etaSeconds,
-    willExhaustBeforeReset:
-        etaSeconds != null && etaSeconds < resetSeconds,
+    willExhaustBeforeReset: etaSeconds != null && etaSeconds < resetSeconds,
   );
 }

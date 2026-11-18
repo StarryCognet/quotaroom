@@ -320,11 +320,7 @@ class StatChip extends StatelessWidget {
 }
 
 class LegendDot extends StatelessWidget {
-  const LegendDot({
-    super.key,
-    required this.color,
-    required this.label,
-  });
+  const LegendDot({super.key, required this.color, required this.label});
 
   final Color color;
   final String label;
@@ -391,7 +387,11 @@ class EmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: colors.text3, height: 1.5),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colors.text3,
+                  height: 1.5,
+                ),
               ),
             ],
             if (action != null) ...[const SizedBox(height: 14), action!],
@@ -428,7 +428,11 @@ class ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: colors.text2, height: 1.5),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: colors.text2,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 14),
             FilledButton(onPressed: onRetry, child: Text(retryLabel)),
@@ -481,11 +485,7 @@ class ModelIcon extends StatelessWidget {
 }
 
 class SyncBanner extends StatelessWidget {
-  const SyncBanner({
-    super.key,
-    required this.progress,
-    required this.l10n,
-  });
+  const SyncBanner({super.key, required this.progress, required this.l10n});
 
   final SyncProgress progress;
   final L10n l10n;

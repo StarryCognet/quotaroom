@@ -17,9 +17,7 @@ class UsageRepository {
       case 'today':
         return DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
       case '5h':
-        return now
-            .subtract(const Duration(hours: 5))
-            .millisecondsSinceEpoch;
+        return now.subtract(const Duration(hours: 5)).millisecondsSinceEpoch;
       case 'all':
         return null;
       default:
@@ -40,10 +38,7 @@ class UsageRepository {
       final syncedAt = nowIso();
       var inserted = 0;
       for (final record in records) {
-        final map = record.toDbMap(
-          accountId: accountId,
-          syncedAt: syncedAt,
-        );
+        final map = record.toDbMap(accountId: accountId, syncedAt: syncedAt);
         final existing = await txn.query(
           'usage_records',
           columns: ['usg_id'],
@@ -96,11 +91,7 @@ class UsageRepository {
     return totalsBetween(accountId, fromMs: fromMsForPeriod(period));
   }
 
-  Future<Totals> totalsBetween(
-    int accountId, {
-    int? fromMs,
-    int? toMs,
-  }) async {
+  Future<Totals> totalsBetween(int accountId, {int? fromMs, int? toMs}) async {
     final where = <String>['account_id = ?'];
     final args = <Object?>[accountId];
     if (fromMs != null) {
@@ -141,7 +132,8 @@ class UsageRepository {
       where.add('created_ms >= ?');
       args.add(fromMs);
     }
-    final rows = await db.rawQuery("""
+    final rows = await db.rawQuery(
+      """
       SELECT model,
              key_id,
              COUNT(*) AS request_count,
@@ -153,7 +145,9 @@ class UsageRepository {
       GROUP BY model, key_id
       ORDER BY total_tokens DESC
       LIMIT ?
-    """, [...args, limit.clamp(1, 20).toInt()]);
+    """,
+      [...args, limit.clamp(1, 20).toInt()],
+    );
     return rows.map((row) {
       return ModelKeyStat(
         model: (row['model'] ?? '').toString(),
@@ -177,12 +171,15 @@ class UsageRepository {
       where.add('created_ms >= ?');
       args.add(fromMs);
     }
-    final rows = await db.rawQuery("""
+    final rows = await db.rawQuery(
+      """
       SELECT * FROM usage_records
       WHERE ${where.join(' AND ')}
       ORDER BY cost_usd DESC, created_ms DESC
       LIMIT ?
-    """, [...args, limit.clamp(1, 20).toInt()]);
+    """,
+      [...args, limit.clamp(1, 20).toInt()],
+    );
     return rows.map(UsageRecord.fromDbMap).toList();
   }
 
@@ -234,7 +231,8 @@ class UsageRepository {
 
   Future<List<DailyStat>> dailyStats(int accountId, int days) async {
     final clamped = days.clamp(1, 365).toInt();
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT date(created_ms / 1000, 'unixepoch', 'localtime') AS date,
              SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
                  + cache_write_1h_tokens) AS total_input_tokens,
@@ -251,7 +249,9 @@ class UsageRepository {
             >= date('now', 'localtime', ?)
       GROUP BY date
       ORDER BY date ASC
-    ''', [accountId, '-$clamped days']);
+    ''',
+      [accountId, '-$clamped days'],
+    );
     return rows.map((row) {
       final hit = _int(row['cache_hit_tokens']);
       final miss = _int(row['uncached_input_tokens']);
@@ -271,7 +271,8 @@ class UsageRepository {
   }
 
   Future<List<HourPoint>> todayTrend(int accountId) async {
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT CAST(strftime('%H', created_ms / 1000, 'unixepoch', 'localtime')
                   AS INTEGER) AS h,
              SUM(input_tokens) AS input,
@@ -282,7 +283,9 @@ class UsageRepository {
         AND date(created_ms / 1000, 'unixepoch', 'localtime')
             = date('now', 'localtime')
       GROUP BY h
-    ''', [accountId]);
+    ''',
+      [accountId],
+    );
     final byHour = <int, Map<String, Object?>>{};
     for (final row in rows) {
       byHour[_int(row['h'])] = row;
@@ -318,9 +321,7 @@ class UsageRepository {
     if (days != null && days > 0) {
       where.add('created_ms >= ?');
       args.add(
-        DateTime.now()
-            .subtract(Duration(days: days))
-            .millisecondsSinceEpoch,
+        DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch,
       );
     }
     if (keyId != null) {
@@ -338,7 +339,8 @@ class UsageRepository {
       args.addAll([like, like, like]);
     }
     final whereSql = where.join(' AND ');
-    final total = Sqflite.firstIntValue(
+    final total =
+        Sqflite.firstIntValue(
           await db.rawQuery(
             'SELECT COUNT(*) FROM usage_records WHERE $whereSql',
             args,
@@ -385,20 +387,20 @@ class UsageRepository {
     if (days != null && days > 0) {
       where.add('created_ms >= ?');
       args.add(
-        DateTime.now()
-            .subtract(Duration(days: days))
-            .millisecondsSinceEpoch,
+        DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch,
       );
     }
     final whereSql = where.join(' AND ');
-    final total = Sqflite.firstIntValue(
+    final total =
+        Sqflite.firstIntValue(
           await db.rawQuery(
             'SELECT COUNT(DISTINCT $keyExpr) FROM usage_records WHERE $whereSql',
             args,
           ),
         ) ??
         0;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT $keyExpr AS session_id,
              MAX(key_id) AS key_id,
              COUNT(*) AS request_count,
@@ -414,7 +416,9 @@ class UsageRepository {
       GROUP BY $keyExpr
       ORDER BY last_ms DESC
       LIMIT ? OFFSET ?
-    ''', [...args, size, (currentPage - 1) * size]);
+    ''',
+      [...args, size, (currentPage - 1) * size],
+    );
     return SessionsPageResult(
       total: total,
       records: rows.map((row) {
@@ -441,7 +445,8 @@ class UsageRepository {
   }
 
   Future<List<KeyStat>> keyStats(int accountId) async {
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT key_id,
              COUNT(*) AS request_count,
              COUNT(DISTINCT CASE WHEN session_id IS NOT NULL AND session_id != ''
@@ -460,7 +465,9 @@ class UsageRepository {
       GROUP BY key_id
       ORDER BY (SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
                     + cache_write_1h_tokens) + SUM(output_tokens)) DESC
-    ''', [accountId]);
+    ''',
+      [accountId],
+    );
     return rows.map((row) {
       final lastMs = _int(row['last_ms']);
       return KeyStat(
@@ -486,7 +493,8 @@ class UsageRepository {
     int days = 7,
   }) async {
     final span = days.clamp(1, 30).toInt();
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT key_id,
              date(created_ms / 1000, 'unixepoch', 'localtime') AS day,
              SUM(input_tokens + cache_read_tokens + cache_write_5m_tokens
@@ -496,7 +504,9 @@ class UsageRepository {
         AND date(created_ms / 1000, 'unixepoch', 'localtime')
             >= date('now', 'localtime', ?)
       GROUP BY key_id, day
-    ''', [accountId, '-${span - 1} days']);
+    ''',
+      [accountId, '-${span - 1} days'],
+    );
     final byKey = <String, Map<String, double>>{};
     for (final row in rows) {
       final key = (row['key_id'] ?? '').toString();
@@ -577,28 +587,33 @@ class UsageRepository {
           'total_records': 0,
         });
       }
-      await txn.rawUpdate('''
+      await txn.rawUpdate(
+        '''
         UPDATE usage_sync_state
         SET last_sync_at = ?, last_sync_status = ?, last_sync_error = ?,
             last_inserted_count = last_inserted_count + ?
         WHERE account_id = ?
-      ''', [nowIso(), status, error, inserted, accountId]);
+      ''',
+        [nowIso(), status, error, inserted, accountId],
+      );
       await _refreshSyncTotals(txn, accountId);
     });
   }
 
-  Future<void> refreshSyncTotals(int accountId) => db.transaction(
-    (txn) => _refreshSyncTotals(txn, accountId),
-  );
+  Future<void> refreshSyncTotals(int accountId) =>
+      db.transaction((txn) => _refreshSyncTotals(txn, accountId));
 
   Future<void> _refreshSyncTotals(Transaction txn, int accountId) async {
-    final rows = await txn.rawQuery('''
+    final rows = await txn.rawQuery(
+      '''
       SELECT COUNT(*) AS total,
              MIN(created_at) AS oldest,
              MAX(created_at) AS newest
       FROM usage_records
       WHERE account_id = ?
-    ''', [accountId]);
+    ''',
+      [accountId],
+    );
     final row = rows.isEmpty ? <String, Object?>{} : rows.first;
     await txn.update(
       'usage_sync_state',

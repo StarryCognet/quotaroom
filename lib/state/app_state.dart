@@ -14,6 +14,7 @@ import '../data/opencode_api.dart';
 import '../data/prefs.dart';
 import '../data/settings_repository.dart';
 import '../data/sync_service.dart';
+import '../data/update_service.dart';
 import '../data/usage_repository.dart';
 import '../data/widget_service.dart';
 
@@ -31,8 +32,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     required this.fxService,
     NotificationService? notifications,
     WidgetService? widgetService,
+    UpdateService? updateService,
   }) : notifications = notifications ?? NotificationService(),
-       widgetService = widgetService ?? WidgetService();
+       widgetService = widgetService ?? WidgetService(),
+       updateService = updateService ?? UpdateService();
 
   final AppDatabase db;
   final OpenCodeApi api;
@@ -44,6 +47,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   final FxService fxService;
   final NotificationService notifications;
   final WidgetService widgetService;
+  final UpdateService updateService;
 
   bool initialized = false;
   bool loading = true;
@@ -60,6 +64,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   SyncProgress progress = SyncProgress.idle;
   SyncResult? lastSyncResult;
   List<Map<String, Object?>> syncLog = const [];
+  UpdateInfo? availableUpdate;
+  bool checkingUpdate = false;
+  String? updateError;
+  DateTime? lastUpdateCheck;
 
   String dashboardRange = 'today';
   String language = 'zh';
@@ -92,6 +100,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     language = prefs.language;
     themeMode = prefs.themeMode;
     currency = prefs.currency;
+    lastUpdateCheck = prefs.updateCheckedAt;
     databasePath = db.db.path;
     try {
       settings = await settingsRepo.getSettings();
@@ -543,6 +552,40 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     return restored;
   }
+
+  /// Checks GitHub at most once per 24h unless [force] is set. Throws on
+  /// network errors so the manual "check update" row can show the reason.
+  Future<UpdateInfo?> checkForUpdate({bool force = false}) async {
+    if (!force && !shouldAutoCheckUpdate) return null;
+    checkingUpdate = true;
+    updateError = null;
+    notifyListeners();
+    try {
+      final info = await updateService.check();
+      lastUpdateCheck = DateTime.now();
+      await prefs.setUpdateCheckedAt(lastUpdateCheck!);
+      availableUpdate = info.hasUpdate ? info : null;
+      return info;
+    } catch (e) {
+      updateError = e.toString();
+      rethrow;
+    } finally {
+      checkingUpdate = false;
+      notifyListeners();
+    }
+  }
+
+  bool get shouldAutoCheckUpdate {
+    final last = lastUpdateCheck;
+    return last == null ||
+        DateTime.now().difference(last) >= const Duration(hours: 24);
+  }
+
+  bool isUpdateDismissed(String version) =>
+      prefs.dismissedUpdateVersion == version;
+
+  Future<void> dismissUpdate(String version) =>
+      prefs.setDismissedUpdateVersion(version);
 
   Future<void> setDailyBudget(double? usd) async {
     final value = usd != null && usd > 0 ? usd : null;

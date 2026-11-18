@@ -31,13 +31,14 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v2.0.0 直链：[QuotaRoom-v2.0.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.0.0/QuotaRoom-v2.0.0.apk)
-- SHA-256：`5d05ee8e6ceb709e994f806f3bed9369afabe40dc1397b54ed61e10029d10acc`
+- v2.1.0 直链：[QuotaRoom-v2.1.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.1.0/QuotaRoom-v2.1.0.apk)
+- SHA-256：见 Release 附件 `SHA256SUMS.txt`
 
 > APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
+- **v2.1.0**：应用内更新流程——启动后每日自动检查 GitHub Release，发现新版本时弹出带彩带效果的更新公告，展示版本与更新内容；点击「下载并安装」显示实时进度并自动拉起 Android 系统安装器，首次安装引导授权「安装未知应用」；「稍后再说」后同一版本不再反复弹窗。
 - **v2.0.0**：额度节奏 / 预计耗尽、每日预算、额度与预算本地提醒；统计页新增周期对比、模型 × Key、最贵请求 Top 5；记录页支持搜索与时间 / 模型 / Key 筛选，Key 卡片可下钻并显示 7 日 sparkline；新增 Android 桌面小组件、WorkManager 后台同步、长按快捷方式、检查更新、CSV 导出、数据库备份 / 恢复、用量摘要分享、同步日志与 AMOLED 纯黑主题。
 - **v1.2.0**：记录页新增「Key 用量」Tab，按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间；会话与记录列表移除分页器，滚动到底自动加载更多；新增 keyStats 聚合查询与测试；版本 1.2.0。
 - **v1.1.0**：UI/UX 重构——首页配额合并为紧凑三行、KPI 减到 4 个、趋势图上移；配额改为「已用% + 剩余% + 绝对重置时间」并加入健康度配色；本地数据优先渲染、配额异步刷新；首页/统计/记录/账号下拉刷新统一；记录页固定分页器 + 紧凑卡片与短时间格式；统计页改为 KPI → 趋势 → 模型 → Token 构成；账号页账户卡前置；暗色对比度、图表字号、同步状态点、首次同步提示；补充异常隔离。
@@ -73,7 +74,8 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 - 额度节奏与预计耗尽时间、每日预算、额度 / 预算本地通知
 - 周期对比、模型 × Key 组合排行、最贵请求 Top 5
 - Android 桌面小组件、WorkManager 后台同步、长按快捷方式
-- 同步日志、检查更新、CSV 导出、SQLite 备份 / 恢复、用量摘要分享
+- 同步日志、CSV 导出、SQLite 备份 / 恢复、用量摘要分享
+- 应用内更新：彩带公告、Release 更新内容、APK 下载进度与系统安装器
 - 多账号：添加 / 切换 / 重命名 / 重新登录 / 退出 / 删除
 - 自动增量同步（1/5/15/30 分钟），同步范围（30/60/90/180 天 / 全部）
 - 浅色 / 深色 / 跟随系统 / AMOLED 纯黑，中文 / English，CNY / USD
@@ -86,7 +88,7 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v2.0.0.apk
+adb install -r QuotaRoom-v2.1.0.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。

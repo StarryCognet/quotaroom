@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 class UpdateInfo {
   const UpdateInfo({
@@ -10,6 +12,8 @@ class UpdateInfo {
     required this.hasUpdate,
     required this.releaseUrl,
     required this.notes,
+    this.apkUrl,
+    this.apkSize = 0,
   });
 
   final String current;
@@ -17,6 +21,10 @@ class UpdateInfo {
   final bool hasUpdate;
   final String releaseUrl;
   final String notes;
+  final String? apkUrl;
+  final int apkSize;
+
+  bool get hasApk => apkUrl != null && apkUrl!.isNotEmpty;
 }
 
 class UpdateService {
@@ -37,18 +45,132 @@ class UpdateService {
     }
     final data = jsonDecode(utf8.decode(response.bodyBytes));
     if (data is! Map) throw Exception('Invalid release payload');
+    final package = await PackageInfo.fromPlatform();
+    return parseRelease(data.cast<String, Object?>(), current: package.version);
+  }
+
+  /// Parses the `/releases/latest` payload. Kept pure for unit tests.
+  static UpdateInfo parseRelease(
+    Map<String, Object?> data, {
+    required String current,
+  }) {
     final tag = (data['tag_name'] ?? '').toString();
     final url = (data['html_url'] ?? '').toString();
-    final notes = (data['body'] ?? '').toString();
-    final package = await PackageInfo.fromPlatform();
-    final current = package.version;
+    final rawNotes = (data['body'] ?? '').toString();
+
+    String? apkUrl;
+    var apkSize = 0;
+    final assets = data['assets'];
+    if (assets is List) {
+      for (final asset in assets) {
+        if (asset is! Map) continue;
+        final name = (asset['name'] ?? '').toString().toLowerCase();
+        if (!name.endsWith('.apk')) continue;
+        apkUrl = (asset['browser_download_url'] ?? '').toString();
+        apkSize = (asset['size'] as num?)?.toInt() ?? 0;
+        break;
+      }
+    }
+
     return UpdateInfo(
       current: current,
       latest: tag,
       hasUpdate: _isNewer(tag, current),
       releaseUrl: url,
-      notes: notes,
+      notes: cleanNotes(rawNotes),
+      apkUrl: apkUrl,
+      apkSize: apkSize,
     );
+  }
+
+  /// Downloads the release APK into the cache while reporting progress.
+  Future<File> downloadApk(
+    UpdateInfo info, {
+    void Function(int received, int total)? onProgress,
+  }) async {
+    final url = info.apkUrl;
+    if (url == null || url.isEmpty) {
+      throw Exception('Release has no APK asset');
+    }
+    final dir = await getTemporaryDirectory();
+    final safeVersion = info.latest.replaceAll(RegExp(r'[^0-9A-Za-z._-]'), '_');
+    final file = File('${dir.path}/QuotaRoom-$safeVersion.apk');
+    if (await file.exists()) {
+      await file.delete();
+    }
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url))
+        ..headers['User-Agent'] = 'QuotaRoom';
+      final response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        throw Exception('Download HTTP ${response.statusCode}');
+      }
+      final total = response.contentLength ?? info.apkSize;
+      final sink = file.openWrite();
+      var received = 0;
+      var lastPercent = -1;
+      try {
+        await for (final chunk in response.stream.timeout(
+          const Duration(seconds: 45),
+        )) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (total > 0) {
+            final percent = (received * 100 / total).clamp(0, 100).toInt();
+            if (percent != lastPercent) {
+              lastPercent = percent;
+              onProgress?.call(received, total);
+            }
+          } else {
+            onProgress?.call(received, 0);
+          }
+        }
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      if (received < 1024 * 1024) {
+        throw Exception('Downloaded APK is incomplete');
+      }
+      final raf = await file.open();
+      try {
+        final header = await raf.read(2);
+        if (header.length < 2 || header[0] != 0x50 || header[1] != 0x4B) {
+          throw Exception('Downloaded file is not an APK');
+        }
+      } finally {
+        await raf.close();
+      }
+      return file;
+    } catch (_) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // Best-effort cleanup.
+      }
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Trims GitHub markdown so release notes read well in a dialog.
+  static String cleanNotes(String raw) {
+    return raw
+        .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), '')
+        .replaceAllMapped(
+          RegExp(r'\[([^\]]+)\]\([^)]*\)'),
+          (match) => match.group(1) ?? '',
+        )
+        .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^\s*[-*]\s+', multiLine: true), '• ')
+        .replaceAll('**', '')
+        .replaceAll('`', '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   static bool _isNewer(String latest, String current) {

@@ -157,8 +157,7 @@ class _LoginWebViewPageState extends State<LoginWebViewPage> {
             child: Stack(
               children: [
                 WebViewWidget(controller: _controller),
-                if (!_ready)
-                  const Center(child: CircularProgressIndicator()),
+                if (!_ready) const Center(child: CircularProgressIndicator()),
                 if (_error != null)
                   ColoredBox(
                     color: Theme.of(context).scaffoldBackgroundColor,

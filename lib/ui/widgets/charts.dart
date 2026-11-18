@@ -310,11 +310,7 @@ class ModelDonut extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   dimension == 'cost'
-                      ? fmtMoney(
-                          top[i].value,
-                          currency: currency,
-                          rate: rate,
-                        )
+                      ? fmtMoney(top[i].value, currency: currency, rate: rate)
                       : fmtTokens(top[i].value),
                   style: TextStyle(
                     fontSize: 11.5,
@@ -520,7 +516,11 @@ class TrendLineChart extends StatelessWidget {
                       return Padding(
                         padding: const EdgeInsets.only(left: 4),
                         child: Text(
-                          fmtMoney(value / costScale, currency: currency, rate: rate),
+                          fmtMoney(
+                            value / costScale,
+                            currency: currency,
+                            rate: rate,
+                          ),
                           style: TextStyle(fontSize: 9.5, color: colors.text3),
                         ),
                       );
@@ -663,10 +663,7 @@ class _SparklinePainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          color.withValues(alpha: 0.24),
-          color.withValues(alpha: 0.0),
-        ],
+        colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.0)],
       ).createShader(Offset.zero & size);
     canvas.drawPath(fillPath, fillPaint);
   }
