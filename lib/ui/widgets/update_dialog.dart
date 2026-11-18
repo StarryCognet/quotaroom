@@ -42,9 +42,39 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   int _total = 0;
   String? _error;
   File? _file;
+  bool _showConfetti = false;
+  Animation<double>? _routeAnimation;
 
   bool get _busy =>
       _phase == _UpdatePhase.downloading || _phase == _UpdatePhase.installing;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animation = ModalRoute.of(context)?.animation;
+    if (identical(animation, _routeAnimation)) return;
+    _routeAnimation?.removeStatusListener(_onRouteStatus);
+    _routeAnimation = animation;
+    _routeAnimation?.addStatusListener(_onRouteStatus);
+    if (animation?.status == AnimationStatus.completed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startConfetti());
+    }
+  }
+
+  void _onRouteStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _startConfetti();
+  }
+
+  void _startConfetti() {
+    if (!mounted || _showConfetti) return;
+    setState(() => _showConfetti = true);
+  }
+
+  @override
+  void dispose() {
+    _routeAnimation?.removeStatusListener(_onRouteStatus);
+    super.dispose();
+  }
 
   Future<void> _later() async {
     await widget.state.dismissUpdate(widget.info.latest);
@@ -146,7 +176,6 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           constraints: const BoxConstraints(maxWidth: 440),
           child: Stack(
             children: [
-              Positioned.fill(child: ConfettiBurst()),
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -262,6 +291,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                   ),
                 ],
               ),
+              if (_showConfetti) const Positioned.fill(child: ConfettiBurst()),
             ],
           ),
         ),

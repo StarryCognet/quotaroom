@@ -31,13 +31,14 @@ QuotaRoom 是 [GoGauge (opencode-go-gauge)](https://github.com/yphyphyph/opencod
 ## 下载
 
 - 最新版：[GitHub Releases](https://github.com/StarryCognet/quotaroom/releases/latest)
-- v2.1.0 直链：[QuotaRoom-v2.1.0.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.1.0/QuotaRoom-v2.1.0.apk)
-- SHA-256：`2444af238667396b30c7907391822e5214e40e45c6042d3f0c9b4994f2d80b83`
+- v2.1.1 直链：[QuotaRoom-v2.1.1.apk](https://github.com/StarryCognet/quotaroom/releases/download/v2.1.1/QuotaRoom-v2.1.1.apk)
+- SHA-256：见 Release 附件 `SHA256SUMS.txt`
 
 > APK 使用项目固定的 release 签名（keystore 由 GitHub Actions Secrets 保存，不在仓库内），后续版本可直接覆盖升级。包名是 `com.starrycognet.quotaroom`，与旧版 GoGauge Mobile 是独立应用，可以并存。
 
 ## 更新记录
 
+- **v2.1.1**：修正更新公告彩带动效——弹窗完全出现后再播放，时长延长到 3 秒，粒子从标题下方朝下喷洒，暗色 / AMOLED 下也清晰可见。
 - **v2.1.0**：应用内更新流程——启动后每日自动检查 GitHub Release，发现新版本时弹出带彩带效果的更新公告，展示版本与更新内容；点击「下载并安装」显示实时进度并自动拉起 Android 系统安装器，首次安装引导授权「安装未知应用」；「稍后再说」后同一版本不再反复弹窗。
 - **v2.0.0**：额度节奏 / 预计耗尽、每日预算、额度与预算本地提醒；统计页新增周期对比、模型 × Key、最贵请求 Top 5；记录页支持搜索与时间 / 模型 / Key 筛选，Key 卡片可下钻并显示 7 日 sparkline；新增 Android 桌面小组件、WorkManager 后台同步、长按快捷方式、检查更新、CSV 导出、数据库备份 / 恢复、用量摘要分享、同步日志与 AMOLED 纯黑主题。
 - **v1.2.0**：记录页新增「Key 用量」Tab，按 API Key 合并请求数 / Token / 费用 / 占比 / 最后使用时间；会话与记录列表移除分页器，滚动到底自动加载更多；新增 keyStats 聚合查询与测试；版本 1.2.0。
@@ -88,7 +89,7 @@ This is a community-maintained Flutter/Android port and rebrand of GoGauge, not 
 从 [Releases](https://github.com/StarryCognet/quotaroom/releases/latest) 下载 APK 后直接安装（需允许「安装未知来源应用」），或：
 
 ```bash
-adb install -r QuotaRoom-v2.1.0.apk
+adb install -r QuotaRoom-v2.1.1.apk
 ```
 
 要求：Android 7.0+（minSdk 24），无需电脑常驻。安装后启动器名称是 **QuotaRoom**。
