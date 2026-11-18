@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
-import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
+import '../prism/app_glyphs.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
 import '../widgets/skeleton.dart';
@@ -25,12 +26,12 @@ class _StatsPageState extends State<StatsPage> {
     final state = context.watch<AppState>();
     final l10n = state.l10n;
     final data = state.dashboard;
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     if (data == null) {
       return state.loadingDashboard
           ? const DashboardSkeleton()
           : EmptyState(
-              icon: Icons.bar_chart_rounded,
+              glyph: AppGlyphs.dataUsage,
               title: l10n.t('noData'),
               subtitle: l10n.t('syncHint'),
               action: FilledButton(
@@ -40,90 +41,94 @@ class _StatsPageState extends State<StatsPage> {
             );
     }
     final totals = data.totals;
-    return RefreshIndicator(
-      onRefresh: () => state.syncNow(),
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
-        children: [
-          RangeSelector(
-            value: state.dashboardRange,
-            onChanged: (value) => state.setRange(value),
-            l10n: l10n,
-          ),
-          const SizedBox(height: 12),
-          _KpiRow(totals: totals, state: state),
-          const SizedBox(height: 14),
-          _ComparisonCard(data: data, state: state),
-          const SizedBox(height: 14),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(
-                  title: l10n.t('usageTrend'),
-                  subtitle: l10n.t('totalTokenHint'),
-                  trailing: Text(
-                    l10n.t('trendHint'),
-                    style: TextStyle(fontSize: 11, color: colors.text3),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TrendLineChart(
-                  days: data.trend30,
-                  l10n: l10n,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(
-                  title: l10n.t('modelUsage'),
-                  trailing: PillSelector<String>(
-                    compact: true,
-                    value: _dimension,
-                    onChanged: (value) => setState(() => _dimension = value),
-                    options: [
-                      PillOption(value: 'input', label: l10n.t('input')),
-                      PillOption(value: 'output', label: l10n.t('output')),
-                      PillOption(value: 'cost', label: l10n.t('cost')),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ModelDonut(
-                  models: data.models,
-                  dimension: _dimension,
-                  l10n: l10n,
-                  currency: state.currency,
-                  rate: state.usdCny,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _ModelKeyCard(data: data, state: state),
-          const SizedBox(height: 14),
-          _TopExpensiveCard(data: data, state: state),
-          const SizedBox(height: 14),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionHeader(title: l10n.t('tokenBreakdown')),
-                const SizedBox(height: 10),
-                _TokenTiles(totals: totals, l10n: l10n),
-              ],
-            ),
-          ),
-        ],
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        context.appBarInset + 8,
+        16,
+        24 + context.bottomInset,
       ),
+      children: [
+        RangeSelector(
+          value: state.dashboardRange,
+          onChanged: (value) => state.setRange(value),
+          l10n: l10n,
+        ),
+        const SizedBox(height: 12),
+        _KpiRow(totals: totals, state: state),
+        const SizedBox(height: 14),
+        _ComparisonCard(data: data, state: state),
+        const SizedBox(height: 14),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(
+                title: l10n.t('usageTrend'),
+                subtitle: l10n.t('totalTokenHint'),
+                trailing: Text(
+                  l10n.t('trendHint'),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TrendLineChart(
+                days: data.trend30,
+                l10n: l10n,
+                currency: state.currency,
+                rate: state.usdCny,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(
+                title: l10n.t('modelUsage'),
+                trailing: PillSelector<String>(
+                  compact: true,
+                  value: _dimension,
+                  onChanged: (value) => setState(() => _dimension = value),
+                  options: [
+                    PillOption(value: 'input', label: l10n.t('input')),
+                    PillOption(value: 'output', label: l10n.t('output')),
+                    PillOption(value: 'cost', label: l10n.t('cost')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              ModelDonut(
+                models: data.models,
+                dimension: _dimension,
+                l10n: l10n,
+                currency: state.currency,
+                rate: state.usdCny,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _ModelKeyCard(data: data, state: state),
+        const SizedBox(height: 14),
+        _TopExpensiveCard(data: data, state: state),
+        const SizedBox(height: 14),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(title: l10n.t('tokenBreakdown')),
+              const SizedBox(height: 10),
+              _TokenTiles(totals: totals, l10n: l10n),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -136,7 +141,7 @@ class _KpiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final items = [
       KpiCard(
@@ -146,28 +151,28 @@ class _KpiRow extends StatelessWidget {
           currency: state.currency,
           rate: state.usdCny,
         ),
-        color: colors.amber,
-        valueColor: colors.amber,
-        icon: Icons.payments_outlined,
+        color: const Color(0xFFD97706),
+        valueColor: const Color(0xFFD97706),
+        icon: AppGlyphs.star,
       ),
       KpiCard(
         label: l10n.t('totalRequests'),
         value: fmtInt(totals.requestCount),
-        color: colors.blue,
-        icon: Icons.call_made_rounded,
+        color: const Color(0xFF4F8EF7),
+        icon: AppGlyphs.requests,
       ),
       KpiCard(
         label: l10n.t('totalTokens'),
         value: fmtTokens(totals.totalTokens),
-        color: colors.primary,
-        icon: Icons.auto_awesome_rounded,
+        color: scheme.primary,
+        icon: AppGlyphs.dataUsage,
       ),
       KpiCard(
         label: l10n.t('hitRate'),
         value: '${totals.hitRate.toStringAsFixed(1)}%',
-        color: colors.green,
-        valueColor: colors.green,
-        icon: Icons.bolt_rounded,
+        color: const Color(0xFF22C55E),
+        valueColor: const Color(0xFF22C55E),
+        icon: AppGlyphs.bolt,
       ),
     ];
     return LayoutBuilder(
@@ -194,14 +199,30 @@ class _TokenTiles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final items = [
-      (l10n.t('inputTokens'), totals.uncachedInputTokens, colors.blue),
-      (l10n.t('outputTokens'), totals.totalOutputTokens, colors.green),
-      (l10n.t('reasoningTokens'), totals.totalReasoningTokens, colors.purple),
-      (l10n.t('cacheReadTokens'), totals.cacheHitTokens, colors.cyan),
-      (l10n.t('cacheWriteTokens'), totals.cacheWriteTokens, colors.amber),
-      (l10n.t('sessions'), totals.sessionCount, colors.primary),
+      (
+        l10n.t('inputTokens'),
+        totals.uncachedInputTokens,
+        const Color(0xFF4F8EF7),
+      ),
+      (
+        l10n.t('outputTokens'),
+        totals.totalOutputTokens,
+        const Color(0xFF22C55E),
+      ),
+      (l10n.t('reasoningTokens'), totals.totalReasoningTokens, scheme.primary),
+      (
+        l10n.t('cacheReadTokens'),
+        totals.cacheHitTokens,
+        const Color(0xFF06B6D4),
+      ),
+      (
+        l10n.t('cacheWriteTokens'),
+        totals.cacheWriteTokens,
+        const Color(0xFFD97706),
+      ),
+      (l10n.t('sessions'), totals.sessionCount, scheme.tertiary),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -215,12 +236,12 @@ class _TokenTiles extends StatelessWidget {
               Container(
                 width: width,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+                  horizontal: 11,
+                  vertical: 9,
                 ),
-                decoration: BoxDecoration(
-                  color: colors.muted,
-                  borderRadius: BorderRadius.circular(10),
+                decoration: ShapeDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  shape: AppShape.all(AppCorner.sm),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,13 +256,15 @@ class _TokenTiles extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             item.$1,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11, color: colors.text3),
+                            style: AppTextStyle.caption2
+                                .of(context)
+                                .copyWith(color: scheme.onSurfaceVariant),
                           ),
                         ),
                       ],
@@ -252,12 +275,14 @@ class _TokenTiles extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         fmtTokens(item.$2),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: colors.text,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        style: AppTextStyle.subheadline
+                            .of(context, emphasized: true)
+                            .copyWith(
+                              color: scheme.onSurface,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                       ),
                     ),
                   ],
@@ -278,7 +303,7 @@ class _ComparisonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final previousRange = data.previousRange;
     if (previousRange == null) return const SizedBox.shrink();
@@ -318,10 +343,10 @@ class _ComparisonCard extends StatelessWidget {
                 : '—',
             delta: _delta(current.totalCostUsd, previous.totalCostUsd),
             highlightCost: true,
-            colors: colors,
+            scheme: scheme,
             l10n: l10n,
           ),
-          Divider(height: 12, color: colors.border),
+          Divider(height: 12, thickness: 1),
           _ComparisonRow(
             label: l10n.t('totalTokens'),
             current: fmtTokens(current.totalTokens),
@@ -330,10 +355,10 @@ class _ComparisonCard extends StatelessWidget {
               current.totalTokens.toDouble(),
               previous.totalTokens.toDouble(),
             ),
-            colors: colors,
+            scheme: scheme,
             l10n: l10n,
           ),
-          Divider(height: 12, color: colors.border),
+          Divider(height: 12, thickness: 1),
           _ComparisonRow(
             label: l10n.t('totalRequests'),
             current: fmtInt(current.requestCount),
@@ -342,7 +367,7 @@ class _ComparisonCard extends StatelessWidget {
               current.requestCount.toDouble(),
               previous.requestCount.toDouble(),
             ),
-            colors: colors,
+            scheme: scheme,
             l10n: l10n,
           ),
         ],
@@ -363,8 +388,9 @@ class _ComparisonHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final style = TextStyle(fontSize: 9.5, color: colors.text3);
+    final style = AppTextStyle.caption2
+        .of(context)
+        .copyWith(color: context.colorScheme.onSurfaceVariant);
     return Row(
       children: [
         const SizedBox(width: 80),
@@ -389,7 +415,7 @@ class _ComparisonRow extends StatelessWidget {
     required this.current,
     required this.previous,
     required this.delta,
-    required this.colors,
+    required this.scheme,
     required this.l10n,
     this.highlightCost = false,
   });
@@ -398,17 +424,17 @@ class _ComparisonRow extends StatelessWidget {
   final String current;
   final String previous;
   final double? delta;
-  final AppColors colors;
+  final ColorScheme scheme;
   final L10n l10n;
   final bool highlightCost;
 
   @override
   Widget build(BuildContext context) {
     final deltaColor = delta == null
-        ? colors.text3
+        ? scheme.onSurfaceVariant
         : highlightCost
-        ? (delta! > 0 ? colors.red : colors.green)
-        : colors.text2;
+        ? (delta! > 0 ? scheme.error : const Color(0xFF16A34A))
+        : scheme.onSurfaceVariant;
     final deltaText = delta == null
         ? l10n.t('newValue')
         : '${delta! >= 0 ? '+' : ''}${delta!.toStringAsFixed(1)}%';
@@ -420,7 +446,9 @@ class _ComparisonRow extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10.5, color: colors.text3),
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
         Expanded(
@@ -428,12 +456,12 @@ class _ComparisonRow extends StatelessWidget {
             current,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: colors.text,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+            style: AppTextStyle.caption1
+                .of(context, emphasized: true)
+                .copyWith(
+                  color: scheme.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
         ),
         Expanded(
@@ -441,11 +469,12 @@ class _ComparisonRow extends StatelessWidget {
             previous,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10.5,
-              color: colors.text3,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+            style: AppTextStyle.caption2
+                .of(context)
+                .copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
         ),
         SizedBox(
@@ -453,12 +482,12 @@ class _ComparisonRow extends StatelessWidget {
           child: Text(
             deltaText,
             textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: deltaColor,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+            style: AppTextStyle.caption2
+                .of(context, emphasized: true)
+                .copyWith(
+                  color: deltaColor,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
           ),
         ),
       ],
@@ -474,7 +503,7 @@ class _ModelKeyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final entries = data.modelKeys;
     return AppCard(
@@ -488,13 +517,13 @@ class _ModelKeyCard extends StatelessWidget {
           const SizedBox(height: 8),
           if (entries.isEmpty)
             EmptyState(
-              icon: Icons.grid_view_rounded,
+              glyph: AppGlyphs.appsList,
               title: l10n.t('noData'),
               compact: true,
             )
           else
             for (var i = 0; i < entries.length; i++) ...[
-              if (i > 0) Divider(height: 12, color: colors.border),
+              if (i > 0) Divider(height: 12, thickness: 1),
               Row(
                 children: [
                   ModelIcon(model: entries[i].model, size: 15),
@@ -507,11 +536,9 @@ class _ModelKeyCard extends StatelessWidget {
                           entries[i].model,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: colors.text,
-                          ),
+                          style: AppTextStyle.caption1
+                              .of(context, emphasized: true)
+                              .copyWith(color: scheme.onSurface),
                         ),
                         const SizedBox(height: 1),
                         Text(
@@ -520,7 +547,9 @@ class _ModelKeyCard extends StatelessWidget {
                           '${l10n.t('requestsInline')}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 9.5, color: colors.text3),
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -531,12 +560,14 @@ class _ModelKeyCard extends StatelessWidget {
                     children: [
                       Text(
                         fmtTokens(entries[i].totalTokens),
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: colors.text,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        style: AppTextStyle.caption2
+                            .of(context, emphasized: true)
+                            .copyWith(
+                              color: scheme.onSurface,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                       ),
                       const SizedBox(height: 1),
                       Text(
@@ -545,7 +576,9 @@ class _ModelKeyCard extends StatelessWidget {
                           currency: state.currency,
                           rate: state.usdCny,
                         ),
-                        style: TextStyle(fontSize: 9.5, color: colors.amber),
+                        style: AppTextStyle.caption2
+                            .of(context)
+                            .copyWith(color: const Color(0xFFD97706)),
                       ),
                     ],
                   ),
@@ -572,7 +605,7 @@ class _TopExpensiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final scheme = context.colorScheme;
     final l10n = state.l10n;
     final entries = data.topExpensive;
     return AppCard(
@@ -586,13 +619,13 @@ class _TopExpensiveCard extends StatelessWidget {
           const SizedBox(height: 8),
           if (entries.isEmpty)
             EmptyState(
-              icon: Icons.local_fire_department_outlined,
+              glyph: AppGlyphs.bolt,
               title: l10n.t('noData'),
               compact: true,
             )
           else
             for (var i = 0; i < entries.length; i++) ...[
-              if (i > 0) Divider(height: 12, color: colors.border),
+              if (i > 0) Divider(height: 12, thickness: 1),
               Row(
                 children: [
                   ModelIcon(model: entries[i].model, size: 15),
@@ -605,11 +638,9 @@ class _TopExpensiveCard extends StatelessWidget {
                           entries[i].model,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: colors.text,
-                          ),
+                          style: AppTextStyle.caption1
+                              .of(context, emphasized: true)
+                              .copyWith(color: scheme.onSurface),
                         ),
                         const SizedBox(height: 1),
                         Text(
@@ -617,7 +648,9 @@ class _TopExpensiveCard extends StatelessWidget {
                           '${_keyLabel(entries[i].keyId, state, l10n)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 9.5, color: colors.text3),
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -629,12 +662,12 @@ class _TopExpensiveCard extends StatelessWidget {
                       currency: state.currency,
                       rate: state.usdCny,
                     ),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: colors.amber,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                    style: AppTextStyle.caption1
+                        .of(context, emphasized: true)
+                        .copyWith(
+                          color: const Color(0xFFD97706),
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                   ),
                 ],
               ),

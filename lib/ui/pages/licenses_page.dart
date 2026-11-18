@@ -1,14 +1,16 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/icons/icons.dart';
+import 'package:prism_ui/prism_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/theme.dart';
 import '../../state/app_state.dart';
+import '../prism/app_glyphs.dart';
 import '../widgets/common.dart';
 
-/// Shows the MIT license bundled as `assets/LICENSE`, which preserves the
-/// upstream GoGauge copyright notice required by the license.
+/// Shows the GPL-3.0 text and third-party notices bundled as `assets/LICENSE`,
+/// including the upstream GoGauge MIT notice and FlClash / prism_ui credits.
 class OpenSourceLicensesPage extends StatelessWidget {
   const OpenSourceLicensesPage({super.key});
 
@@ -17,11 +19,26 @@ class OpenSourceLicensesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.watch<AppState>().l10n;
-    final colors = context.colors;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.t('openSourceLicenses'))),
+    final scheme = context.colorScheme;
+    return PrismScaffold(
+      bar: ScaffoldBar(
+        isCompact: false,
+        listenable: const AlwaysStoppedAnimation<double>(0),
+        loading: const AlwaysStoppedAnimation<bool>(false),
+        builder: (context) => ColoredBox(
+          color: SurfaceLevel.page.colorOf(context.colorScheme),
+          child: AppBar(
+            leading: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const GlyphIcon(AppGlyphs.chevronBack),
+              tooltip: l10n.t('back'),
+            ),
+            title: Text(l10n.t('openSourceLicenses')),
+          ),
+        ),
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        padding: EdgeInsets.fromLTRB(16, context.appBarInset + 8, 16, 24),
         children: [
           AppCard(
             child: Column(
@@ -31,11 +48,9 @@ class OpenSourceLicensesPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   l10n.t('licenseIntro'),
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.7,
-                    color: colors.text2,
-                  ),
+                  style: AppTextStyle.footnote
+                      .of(context)
+                      .copyWith(color: scheme.onSurfaceVariant, height: 1.7),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -43,8 +58,9 @@ class OpenSourceLicensesPage extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     for (final tech in const [
-                      'MIT',
-                      'GoGauge upstream',
+                      'GPL-3.0',
+                      'MIT upstream',
+                      'prism_ui',
                       'Flutter',
                       'Dart',
                     ])
@@ -53,13 +69,15 @@ class OpenSourceLicensesPage extends StatelessWidget {
                           horizontal: 10,
                           vertical: 4,
                         ),
-                        decoration: BoxDecoration(
-                          color: colors.muted,
-                          borderRadius: BorderRadius.circular(99),
+                        decoration: ShapeDecoration(
+                          color: scheme.surfaceContainerHigh,
+                          shape: AppShape.full,
                         ),
                         child: Text(
                           tech,
-                          style: TextStyle(fontSize: 10.5, color: colors.text2),
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ),
                   ],
@@ -73,19 +91,22 @@ class OpenSourceLicensesPage extends StatelessWidget {
               future: rootBundle.loadString('assets/LICENSE'),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: ActivityIndicator(size: 22, color: scheme.primary),
+                    ),
                   );
                 }
                 return SelectableText(
                   snapshot.data!,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 10.5,
-                    height: 1.6,
-                    color: colors.text2,
-                  ),
+                  style: AppTextStyle.caption2
+                      .of(context)
+                      .copyWith(
+                        fontFamily: 'monospace',
+                        height: 1.6,
+                        color: scheme.onSurfaceVariant,
+                      ),
                 );
               },
             ),
@@ -93,47 +114,41 @@ class OpenSourceLicensesPage extends StatelessWidget {
           const SizedBox(height: 12),
           AppCard(
             padding: EdgeInsets.zero,
-            child: InkWell(
-              onTap: () => _openUpstream(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.code_rounded, size: 18, color: colors.primary),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            l10n.t('upstream'),
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: colors.text,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'github.com/yphyphyph/opencode-go-gauge',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              color: colors.text3,
-                            ),
-                          ),
-                        ],
-                      ),
+            child: PressSurface(
+              fill: const Color(0x00000000),
+              shape: AppShape.all(0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              onPressed: () => _openUpstream(context),
+              child: Row(
+                children: [
+                  GlyphIcon(AppGlyphs.code, size: 18, color: scheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.t('upstream'),
+                          style: AppTextStyle.caption1
+                              .of(context, emphasized: true)
+                              .copyWith(color: scheme.onSurface),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'github.com/yphyphyph/opencode-go-gauge',
+                          style: AppTextStyle.caption2
+                              .of(context)
+                              .copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
                     ),
-                    Icon(
-                      Icons.open_in_new_rounded,
-                      size: 16,
-                      color: colors.text3,
-                    ),
-                  ],
-                ),
+                  ),
+                  GlyphIcon(
+                    AppGlyphs.openExternal,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
               ),
             ),
           ),
@@ -150,13 +165,13 @@ class OpenSourceLicensesPage extends StatelessWidget {
         mode: LaunchMode.externalApplication,
       );
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.t('loadFailed'))));
+        BannerHost.maybeOf(context)
+            ?.show(l10n.t('loadFailed'), level: BannerLevel.error);
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.t('loadFailed')}: $e')));
+      BannerHost.maybeOf(context)
+          ?.show('${l10n.t('loadFailed')}: $e', level: BannerLevel.error);
     }
   }
 }

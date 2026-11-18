@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../core/i18n.dart';
 import '../data/account_repository.dart';
@@ -88,12 +88,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get syncing => progress.running || (syncService.running);
 
   bool get autoSync => settings.autoSync;
-
-  ThemeMode get themeModeValue => switch (themeMode) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.system,
-  };
 
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);

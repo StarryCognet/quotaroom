@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:prism_ui/prism_ui.dart';
 
 Future<bool> showConfirmDialog(
   BuildContext context, {
@@ -8,25 +9,28 @@ Future<bool> showConfirmDialog(
   required String confirmLabel,
   bool danger = false,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  final result = await showDialog<bool>(
+  final scheme = context.colorScheme;
+  final result = await showFloatingDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
+    child: AlertDialog(
+      title: title,
+      destructive: danger,
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
+          onPressed: () => Navigator.of(context).pop(false),
           child: Text(cancelLabel),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          style: danger
-              ? FilledButton.styleFrom(backgroundColor: colors.error)
-              : null,
+          onPressed: () => Navigator.of(context).pop(true),
           child: Text(confirmLabel),
         ),
       ],
+      child: Text(
+        message,
+        style: AppTextStyle.footnote
+            .of(context)
+            .copyWith(color: scheme.onSurfaceVariant, height: 1.5),
+      ),
     ),
   );
   return result == true;
